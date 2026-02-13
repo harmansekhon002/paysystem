@@ -548,7 +548,6 @@ def create_shift():
         cursor.execute('''
             INSERT INTO shifts (user_id, workplace_id, date, start_time, end_time, hours, shift_type, total_pay, notes)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-           
         ''', (
             request.user_id,
             data.get('workplace_id'),
@@ -561,7 +560,7 @@ def create_shift():
             data.get('notes', '')
         ))
         
-        shift_id = cursor.fetchone()[0]
+        shift_id = cursor.lastrowid
         conn.commit()
         
         return jsonify({'id': shift_id, 'success': True}), 201
@@ -686,7 +685,6 @@ def create_expense():
         cursor.execute('''
             INSERT INTO expenses (user_id, category, amount, due_date, is_recurring, notes)
             VALUES (?, ?, ?, ?, ?, ?)
-           
         ''', (
             request.user_id,
             data['category'],
@@ -696,7 +694,7 @@ def create_expense():
             data.get('notes', '')
         ))
         
-        expense_id = cursor.fetchone()[0]
+        expense_id = cursor.lastrowid
         conn.commit()
         
         return jsonify({'id': expense_id, 'success': True}), 201
@@ -785,7 +783,6 @@ def create_goal():
         cursor.execute('''
             INSERT INTO goals (user_id, name, target_amount, deadline, priority, notes)
             VALUES (?, ?, ?, ?, ?, ?)
-           
         ''', (
             request.user_id,
             data['name'],
@@ -795,7 +792,7 @@ def create_goal():
             data.get('notes', '')
         ))
         
-        goal_id = cursor.fetchone()[0]
+        goal_id = cursor.lastrowid
         conn.commit()
         
         return jsonify({'id': goal_id, 'success': True}), 201
