@@ -7,6 +7,7 @@ let expenses = [];
 let goals = [];
 let fortnightSummary = {};
 let stats = {};
+let currentCalendarMonth = new Date();
 
 // ============ AUTHENTICATION ============
 async function handleLogin(event) {
@@ -237,6 +238,7 @@ function renderAll() {
     populateSearchWorkplaces();
     renderSpendingChart();
     renderIncomeChart();
+    renderShiftCalendar();
 }
 
 function renderStats() {
@@ -1127,6 +1129,83 @@ function renderIncomeChart() {
     });
 }
 
+// ============ CALENDAR FUNCTIONS ============
+function renderShiftCalendar() {
+    const calendar = document.getElementById('shiftCalendar');
+    if (!calendar) return;
+
+    const year = currentCalendarMonth.getFullYear();
+    const month = currentCalendarMonth.getMonth();
+    
+    // Update title
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'];
+    const title = document.getElementById('calendarTitle');
+    if (title) {
+        title.textContent = `📅 ${monthNames[month]} ${year}`;
+    }
+    
+    // Get first day of month and number of days
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+    
+    // Build calendar HTML
+    let html = '<div class="calendar-weekdays">';
+    const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    weekdays.forEach(day => {
+        html += `<div class="calendar-weekday">${day}</div>`;
+    });
+    html += '</div><div class="calendar-days">';
+    
+    // Add empty cells for days before month starts
+    for (let i = 0; i < startingDayOfWeek; i++) {
+        html += '<div class="calendar-day empty"></div>';
+    }
+    
+    // Add days of month
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dayShifts = shifts.filter(s => s.date === dateStr);
+        
+        const isToday = new Date().toDateString() === new Date(year, month, day).toDateString();
+        const hasShifts = dayShifts.length > 0;
+        
+        let dayClass = 'calendar-day';
+        if (isToday) dayClass += ' today';
+        if (hasShifts) dayClass += ' has-shifts';
+        
+        let shiftsHtml = '';
+        if (hasShifts) {
+            const totalPay = dayShifts.reduce((sum, s) => sum + (s.total_pay || 0), 0);
+            const totalHours = dayShifts.reduce((sum, s) => sum + (s.hours || 0), 0);
+            shiftsHtml = `
+                <div class="calendar-shifts">
+                    <span class="shift-count">${dayShifts.length} shift${dayShifts.length > 1 ? 's' : ''}</span>
+                    <span class="shift-hours">${totalHours}h</span>
+                    <span class="shift-pay">$${totalPay.toFixed(0)}</span>
+                </div>
+            `;
+        }
+        
+        html += `
+            <div class="${dayClass}" data-date="${dateStr}">
+                <div class="calendar-day-number">${day}</div>
+                ${shiftsHtml}
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    calendar.innerHTML = html;
+}
+
+function changeCalendarMonth(direction) {
+    currentCalendarMonth.setMonth(currentCalendarMonth.getMonth() + direction);
+    renderShiftCalendar();
+}
+
 // Event Listeners
 function setupEventListeners() {
     // Shift form
@@ -1158,6 +1237,16 @@ function setupEventListeners() {
         e.preventDefault();
         await saveContribution();
     });
+    
+    // Calendar navigation
+    const prevMonthBtn = document.getElementById('prevMonth');
+    const nextMonthBtn = document.getElementById('nextMonth');
+    if (prevMonthBtn) {
+        prevMonthBtn.addEventListener('click', () => changeCalendarMonth(-1));
+    }
+    if (nextMonthBtn) {
+        nextMonthBtn.addEventListener('click', () => changeCalendarMonth(1));
+    }
 }
 
 // Tab management
