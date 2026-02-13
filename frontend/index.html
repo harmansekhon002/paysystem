@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payroll & Budget Manager</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-mark">💰</div>
+                <div class="brand-text">
+                    <div class="brand-title">Payroll</div>
+                    <div class="brand-subtitle">Budget Manager</div>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <button class="tab active" data-tab="dashboard" onclick="showTab('dashboard', event)">
+                    <span class="tab-icon">📊</span>
+                    <span class="tab-label">Dashboard</span>
+                </button>
+                <button class="tab" data-tab="shifts" onclick="showTab('shifts', event)">
+                    <span class="tab-icon">🧾</span>
+                    <span class="tab-label">Shifts</span>
+                </button>
+                <button class="tab" data-tab="workplaces" onclick="showTab('workplaces', event)">
+                    <span class="tab-icon">🏢</span>
+                    <span class="tab-label">Workplaces</span>
+                </button>
+                <button class="tab" data-tab="goals" onclick="showTab('goals', event)">
+                    <span class="tab-icon">🎯</span>
+                    <span class="tab-label">Goals</span>
+                </button>
+                <button class="tab" data-tab="budget" onclick="showTab('budget', event)">
+                    <span class="tab-icon">💸</span>
+                    <span class="tab-label">Budget</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-foot">
+                <div class="sidebar-hint">Clean overview. Full detail inside each section.</div>
+            </div>
+        </aside>
+
+        <div class="main-content">
+            <!-- Header -->
+            <header class="app-header">
+                <div class="header-title">
+                    <h1>Payroll & Budget Manager</h1>
+                    <p>Track shifts, spending, and goals with clarity.</p>
+                </div>
+                <div class="fortnight-summary" id="fortnightSummary">
+                    <div class="summary-card earnings">
+                        <span class="label">💵 Total Earned</span>
+                        <span class="value" id="fortnightEarned">$0.00</span>
+                    </div>
+                    <div class="summary-card expenses">
+                        <span class="label">💸 Total Expenses</span>
+                        <span class="value negative" id="fortnightExpenses">$0.00</span>
+                    </div>
+                    <div class="summary-card goals">
+                        <span class="label">🎯 Goals Saved</span>
+                        <span class="value" id="fortnightGoals">$0.00</span>
+                    </div>
+                    <div class="summary-card net">
+                        <span class="label">✨ Available Money</span>
+                        <span class="value highlight" id="netIncome">$0.00</span>
+                    </div>
+                </div>
+            </header>
+
+        <!-- Dashboard Tab -->
+        <div id="dashboard" class="tab-content active">
+            <!-- Dashboard View Tabs -->
+            <div class="dashboard-tabs">
+                <button class="dashboard-tab active" onclick="switchDashboardView('overview')">Overview</button>
+                <button class="dashboard-tab" onclick="switchDashboardView('analytics')">Analytics</button>
+                <button class="dashboard-tab" onclick="switchDashboardView('goals')">Goals</button>
+            </div>
+            
+            <!-- Overview View -->
+            <div id="overview-view" class="dashboard-view active">
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <h2>📊 Quick Stats</h2>
+                        <div id="quickStats" class="stats-grid"></div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2>🎯 This Week Summary</h2>
+                        <div id="budgetOverview" class="budget-summary"></div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2>📋 Recent Shifts</h2>
+                        <div id="recentShifts" class="list-container"></div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2>⚠️ Goals Status</h2>
+                        <div id="goalsStatus" class="goals-status"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Analytics View -->
+            <div id="analytics-view" class="dashboard-view">
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <h2>📈 Weekly Earnings</h2>
+                        <div id="weeklyComparison" class="weekly-summary"></div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2>💸 Expense Breakdown</h2>
+                        <div id="expenseBreakdown" class="expense-chart"></div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2>⏰ Work Analysis</h2>
+                        <div id="workAnalysis" class="work-stats"></div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2>⚡ Productivity</h2>
+                        <div id="productivityMetrics" class="metrics-grid"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Goals View -->
+            <div id="goals-view" class="dashboard-view">
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <h2>💰 Savings vs Spending</h2>
+                        <div id="savingsAnalysis" class="savings-chart"></div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2>📊 Full Statistics</h2>
+                        <div id="usageStats" class="stats-container"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Shifts Tab -->
+        <div id="shifts" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2>My Shifts</h2>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-secondary" onclick="toggleSearch()">🔍 Search</button>
+                        <button class="btn btn-secondary" onclick="exportShifts()">📥 Export</button>
+                        <button class="btn btn-primary" onclick="showShiftModal()">+ Add Shift</button>
+                    </div>
+                </div>
+                
+                <div id="searchPanel" class="search-panel" style="display: none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>From Date</label>
+                            <input type="date" id="searchStartDate">
+                        </div>
+                        <div class="form-group">
+                            <label>To Date</label>
+                            <input type="date" id="searchEndDate">
+                        </div>
+                        <div class="form-group">
+                            <label>Workplace</label>
+                            <select id="searchWorkplace">
+                                <option value="">All Workplaces</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="display: flex; align-items: flex-end;">
+                            <button class="btn btn-primary" onclick="searchShifts()" style="margin-right: 10px;">Search</button>
+                            <button class="btn btn-secondary" onclick="clearSearch()">Clear</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="shiftsList" class="table-container"></div>
+            </div>
+        </div>
+
+        <!-- Workplaces Tab -->
+        <div id="workplaces" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Workplaces</h2>
+                    <button class="btn btn-primary" onclick="showWorkplaceModal()">+ Add Workplace</button>
+                </div>
+                <div id="workplacesList" class="table-container"></div>
+            </div>
+        </div>
+
+        <!-- Goals Tab -->
+        <div id="goals" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Financial Goals</h2>
+                    <button class="btn btn-primary" onclick="showGoalModal()">+ Add Goal</button>
+                </div>
+                <div id="goalsList" class="goals-container"></div>
+            </div>
+        </div>
+
+        <!-- Budget Tab -->
+        <div id="budget" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Budget & Expenses</h2>
+                    <button class="btn btn-primary" onclick="showExpenseModal()">+ Add Expense</button>
+                </div>
+                <div id="expensesList" class="table-container"></div>
+            </div>
+        </div>
+
+        </div>
+    </div>
+
+    <!-- Shift Modal -->
+    <div id="shiftModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="shiftModalTitle">Add Shift</h2>
+                <span class="close" onclick="closeModal('shiftModal')">&times;</span>
+            </div>
+            <form id="shiftForm">
+                <input type="hidden" id="shiftId">
+                
+                <div class="form-group">
+                    <label for="shiftWorkplace">Workplace *</label>
+                    <select id="shiftWorkplace" required></select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="shiftDate">Date *</label>
+                    <input type="date" id="shiftDate" required>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="shiftStart">Start Time *</label>
+                        <input type="time" id="shiftStart" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="shiftEnd">End Time *</label>
+                        <input type="time" id="shiftEnd" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="shiftNotes">Notes</label>
+                    <textarea id="shiftNotes" rows="3"></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('shiftModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Shift</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Workplace Modal -->
+    <div id="workplaceModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="workplaceModalTitle">Add Workplace</h2>
+                <span class="close" onclick="closeModal('workplaceModal')">&times;</span>
+            </div>
+            <form id="workplaceForm">
+                <input type="hidden" id="workplaceId">
+                
+                <div class="form-group">
+                    <label for="workplaceName">Workplace Name *</label>
+                    <input type="text" id="workplaceName" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="baseRate">Base Hourly Rate (AUD) *</label>
+                    <input type="number" id="baseRate" step="0.01" min="0" required>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="weekendMultiplier">Weekend Rate (×)</label>
+                        <input type="number" id="weekendMultiplier" step="0.1" value="1.5">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="publicHolidayMultiplier">Public Holiday Rate (×)</label>
+                        <input type="number" id="publicHolidayMultiplier" step="0.1" value="2.5">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="overtimeMultiplier">Overtime Rate (×)</label>
+                        <input type="number" id="overtimeMultiplier" step="0.1" value="1.5">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="overtimeThreshold">Overtime After (hours)</label>
+                        <input type="number" id="overtimeThreshold" step="0.5" value="8">
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('workplaceModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Workplace</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Expense Modal -->
+    <div id="expenseModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="expenseModalTitle">Add Expense</h2>
+                <span class="close" onclick="closeModal('expenseModal')">&times;</span>
+            </div>
+            <form id="expenseForm">
+                <input type="hidden" id="expenseId">
+                
+                <div class="form-group">
+                    <label for="expenseCategory">Category *</label>
+                    <select id="expenseCategory" required>
+                        <option value="Rent">Rent</option>
+                        <option value="Groceries">Groceries</option>
+                        <option value="Utilities">Utilities</option>
+                        <option value="Transport">Transport</option>
+                        <option value="Entertainment">Entertainment</option>
+                        <option value="Healthcare">Healthcare</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="expenseAmount">Amount (AUD) *</label>
+                    <input type="number" id="expenseAmount" step="0.01" min="0" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="expenseDueDate">Due Date</label>
+                    <input type="date" id="expenseDueDate">
+                </div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="expenseRecurring" checked>
+                        Recurring (include in fortnight calculation)
+                    </label>
+                </div>
+                
+                <div class="form-group">
+                    <label for="expenseNotes">Notes</label>
+                    <textarea id="expenseNotes" rows="3"></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('expenseModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Expense</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Goal Modal -->
+    <div id="goalModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="goalModalTitle">Add Goal</h2>
+                <span class="close" onclick="closeModal('goalModal')">&times;</span>
+            </div>
+            <form id="goalForm">
+                <input type="hidden" id="goalId">
+                
+                <div class="form-group">
+                    <label for="goalName">Goal Name *</label>
+                    <input type="text" id="goalName" placeholder="e.g., College Fees, Holiday, Emergency Fund" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="goalTarget">Target Amount (AUD) *</label>
+                    <input type="number" id="goalTarget" step="0.01" min="0" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="goalDeadline">Target Date</label>
+                    <input type="date" id="goalDeadline">
+                </div>
+                
+                <div class="form-group">
+                    <label for="goalAutoAllocate">Auto-save per Fortnight (AUD)</label>
+                    <input type="number" id="goalAutoAllocate" step="0.01" min="0" value="0">
+                    <small>Automatically set aside this amount each fortnight</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="goalPriority">Priority</label>
+                    <select id="goalPriority">
+                        <option value="3">High</option>
+                        <option value="2" selected>Medium</option>
+                        <option value="1">Low</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="goalNotes">Notes</label>
+                    <textarea id="goalNotes" rows="3"></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('goalModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Goal</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Contribute to Goal Modal -->
+    <div id="contributeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add Money to Goal</h2>
+                <span class="close" onclick="closeModal('contributeModal')">&times;</span>
+            </div>
+            <form id="contributeForm">
+                <input type="hidden" id="contributeGoalId">
+                
+                <div class="form-group">
+                    <label for="contributeAmount">Amount (AUD) *</label>
+                    <input type="number" id="contributeAmount" step="0.01" min="0.01" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="contributeDate">Date</label>
+                    <input type="date" id="contributeDate" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="contributeNotes">Notes</label>
+                    <textarea id="contributeNotes" rows="2"></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('contributeModal')">Cancel</button>
+                    <button type="submit" class="btn btn-success">Add Money</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
