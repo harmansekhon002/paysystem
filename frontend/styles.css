@@ -449,6 +449,17 @@ body {
     grid-column: auto;
 }
 
+/* Chart Containers */
+.chart-container {
+    position: relative;
+    height: 300px;
+    padding: 10px;
+}
+
+.chart-container canvas {
+    max-height: 100%;
+}
+
 /* Buttons */
 .btn {
     padding: 12px 24px;

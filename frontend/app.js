@@ -235,6 +235,8 @@ function renderAll() {
     renderExpensesList();
     renderGoalsList();
     populateSearchWorkplaces();
+    renderSpendingChart();
+    renderIncomeChart();
 }
 
 function renderStats() {
@@ -873,6 +875,164 @@ function renderGoalsList() {
     }).join('') : '<div class="empty-state"><div class="empty-state-icon">🎯</div><div class="empty-state-text">No goals yet. Set your first financial goal!</div></div>';
     
     document.getElementById('goalsList').innerHTML = goalsHtml;
+}
+
+// ============ CHARTS ============
+let spendingChartInstance = null;
+let incomeChartInstance = null;
+
+function renderSpendingChart() {
+    const canvas = document.getElementById('spendingChart');
+    if (!canvas) return;
+    
+    // Group expenses by category
+    const categoryTotals = {};
+    expenses.forEach(expense => {
+        const category = expense.category || 'Other';
+        categoryTotals[category] = (categoryTotals[category] || 0) + expense.amount;
+    });
+    
+    const categories = Object.keys(categoryTotals);
+    const amounts = Object.values(categoryTotals);
+    
+    // Destroy previous chart if exists
+    if (spendingChartInstance) {
+        spendingChartInstance.destroy();
+    }
+    
+    // Create pie chart
+    spendingChartInstance = new Chart(canvas, {
+        type: 'pie',
+        data: {
+            labels: categories,
+            datasets: [{
+                data: amounts,
+                backgroundColor: [
+                    '#3b82f6', '#14b8a6', '#f59e0b', '#ef4444', '#8b5cf6',
+                    '#ec4899', '#f97316', '#06b6d4', '#10b981', '#6366f1'
+                ],
+                borderWidth: 2,
+                borderColor: '#ffffff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 12,
+                        font: {
+                            size: 12,
+                            family: 'Space Grotesk'
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.parsed || 0;
+                            const total = amounts.reduce((a, b) => a + b, 0);
+                            const percentage = ((value / total) * 100).toFixed(1);
+                            return `${label}: $${value.toFixed(2)} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderIncomeChart() {
+    const canvas = document.getElementById('incomeChart');
+    if (!canvas) return;
+    
+    // Group shifts by month
+    const monthlyIncome = {};
+    shifts.forEach(shift => {
+        const date = new Date(shift.date);
+        const monthKey = date.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+        monthlyIncome[monthKey] = (monthlyIncome[monthKey] || 0) + shift.total_pay;
+    });
+    
+    // Sort by date
+    const sortedMonths = Object.keys(monthlyIncome).sort((a, b) => {
+        return new Date(a) - new Date(b);
+    });
+    
+    // Get last 6 months
+    const months = sortedMonths.slice(-6);
+    const income = months.map(m => monthlyIncome[m]);
+    
+    // Destroy previous chart if exists
+    if (incomeChartInstance) {
+        incomeChartInstance.destroy();
+    }
+    
+    // Create line chart
+    incomeChartInstance = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: months,
+            datasets: [{
+                label: 'Monthly Income',
+                data: income,
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 4,
+                pointBackgroundColor: '#3b82f6',
+                pointBorderColor: '#ffffff',
+                pointBorderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `Income: $${context.parsed.y.toFixed(2)}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toFixed(0);
+                        },
+                        font: {
+                            family: 'Space Grotesk'
+                        }
+                    },
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    }
+                },
+                x: {
+                    ticks: {
+                        font: {
+                            family: 'Space Grotesk'
+                        }
+                    },
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
 }
 
 // Event Listeners

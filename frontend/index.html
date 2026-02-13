@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Payroll & Budget Manager</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <!-- Auth Screen -->
@@ -153,8 +154,17 @@
             <div id="analytics-view" class="dashboard-view">
                 <div class="dashboard-grid">
                     <div class="card">
-                        <h2>📈 Weekly Earnings</h2>
-                        <div id="weeklyComparison" class="weekly-summary"></div>
+                        <h2>� Spending by Category</h2>
+                        <div class="chart-container">
+                            <canvas id="spendingChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2>📈 Income Growth</h2>
+                        <div class="chart-container">
+                            <canvas id="incomeChart"></canvas>
+                        </div>
                     </div>
                     
                     <div class="card">
@@ -165,11 +175,6 @@
                     <div class="card">
                         <h2>⏰ Work Analysis</h2>
                         <div id="workAnalysis" class="work-stats"></div>
-                    </div>
-                    
-                    <div class="card">
-                        <h2>⚡ Productivity</h2>
-                        <div id="productivityMetrics" class="metrics-grid"></div>
                     </div>
                 </div>
             </div>
