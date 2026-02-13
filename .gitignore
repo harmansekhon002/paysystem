@@ -44,7 +44,10 @@ wheels/
 .env
 .env.local
 
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
 # OS
 Thumbs.db
-
-window.API_URL = 'https://YOUR-RENDER-URL.onrender.com/api';
