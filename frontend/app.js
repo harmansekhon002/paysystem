@@ -1665,3 +1665,29 @@ async function exportShifts() {
         alert('Error exporting shifts');
     }
 }
+
+// ============ THEME FUNCTIONS ============
+function setTheme(themeName) {
+    // Set theme on body
+    document.body.setAttribute('data-theme', themeName);
+    
+    // Save to localStorage
+    localStorage.setItem('theme', themeName);
+    
+    // Update active button
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    const activeBtn = document.querySelector(`.theme-btn[data-theme="${themeName}"]`);
+    if (activeBtn) {
+        activeBtn.classList.add('active');
+    }
+}
+
+function loadTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'default';
+    setTheme(savedTheme);
+}
+
+// Load theme on page load
+loadTheme();
