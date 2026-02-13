@@ -8,6 +8,10 @@ let goals = [];
 let fortnightSummary = {};
 let stats = {};
 let currentCalendarMonth = new Date();
+let selectedShifts = new Set();
+let selectedExpenses = new Set();
+let selectedGoals = new Set();
+let draggedGoalId = null;
 
 // ============ AUTHENTICATION ============
 async function handleLogin(event) {
@@ -745,6 +749,7 @@ function renderShiftsList() {
         <table>
             <thead>
                 <tr>
+                    <th style="width: 40px;"><input type="checkbox" id="selectAllShiftsTable" onchange="toggleSelectAll('shifts')" ${selectedShifts.size === shifts.length && shifts.length > 0 ? 'checked' : ''}></th>
                     <th>Date</th>
                     <th>Workplace</th>
                     <th>Hours</th>
@@ -756,7 +761,8 @@ function renderShiftsList() {
             </thead>
             <tbody>
                 ${shifts.map(shift => `
-                    <tr>
+                    <tr ${selectedShifts.has(shift.id) ? 'class="selected-row"' : ''}>
+                        <td><input type="checkbox" ${selectedShifts.has(shift.id) ? 'checked' : ''} onchange="toggleSelection('shifts', ${shift.id})"></td>
                         <td>${formatDate(shift.date)}</td>
                         <td>${shift.workplace_name}</td>
                         <td>${shift.hours.toFixed(1)}h</td>
@@ -774,6 +780,7 @@ function renderShiftsList() {
     ` : '<div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-text">No shifts yet. Add your first shift!</div></div>';
     
     document.getElementById('shiftsList').innerHTML = shiftsHtml;
+    updateBulkActionUI('shifts');
 }
 
 function switchDashboardView(view) {
@@ -885,6 +892,7 @@ function renderExpensesList() {
         <table>
             <thead>
                 <tr>
+                    <th style="width: 40px;"><input type="checkbox" id="selectAllExpensesTable" onchange="toggleSelectAll('expenses')" ${selectedExpenses.size === expenses.length && expenses.length > 0 ? 'checked' : ''}></th>
                     <th>Category</th>
                     <th>Amount</th>
                     <th>Due Date</th>
@@ -895,7 +903,8 @@ function renderExpensesList() {
             </thead>
             <tbody>
                 ${expenses.map(exp => `
-                    <tr>
+                    <tr ${selectedExpenses.has(exp.id) ? 'class="selected-row"' : ''}>
+                        <td><input type="checkbox" ${selectedExpenses.has(exp.id) ? 'checked' : ''} onchange="toggleSelection('expenses', ${exp.id})"></td>
                         <td style="font-weight: 600">${exp.category}</td>
                         <td style="color: var(--danger); font-weight: 700">-$${exp.amount.toFixed(2)}</td>
                         <td>${exp.due_date ? formatDate(exp.due_date) : '-'}</td>
@@ -912,6 +921,9 @@ function renderExpensesList() {
     ` : '<div class="empty-state"><div class="empty-state-icon">💵</div><div class="empty-state-text">No expenses yet. Add your first expense!</div></div>';
     
     document.getElementById('expensesList').innerHTML = expensesHtml;
+    updateBulkActionUI('expenses');
+}
+    document.getElementById('expensesList').innerHTML = expensesHtml;
 }
 
 function renderGoalsList() {
@@ -921,12 +933,23 @@ function renderGoalsList() {
         const deadline = goal.deadline ? new Date(goal.deadline + 'T00:00:00') : null;
         const isNearDeadline = deadline && (deadline - new Date()) < 30 * 24 * 60 * 60 * 1000 && !isCompleted;
         
-        let cardClass = 'goal-card';
+        let cardClass = 'goal-card draggable-goal';
         if (isCompleted) cardClass += ' goal-completed';
         else if (isNearDeadline) cardClass += ' goal-deadline-warning';
+        if (selectedGoals.has(goal.id)) cardClass += ' selected-card';
         
         return `
-            <div class="${cardClass}">
+            <div class="${cardClass}" 
+                 data-goal-id="${goal.id}"
+                 draggable="true"
+                 ondragstart="handleDragStart(event, ${goal.id})"
+                 ondragover="handleDragOver(event)"
+                 ondrop="handleDrop(event, ${goal.id})"
+                 ondragend="handleDragEnd(event)">
+                <div class="goal-checkbox">
+                    <input type="checkbox" ${selectedGoals.has(goal.id) ? 'checked' : ''} onchange="toggleSelection('goals', ${goal.id})" onclick="event.stopPropagation()">
+                    <span class="drag-handle" title="Drag to reorder">⋮⋮</span>
+                </div>
                 <div class="goal-header">
                     <div>
                         <div class="goal-name">${goal.name}</div>
@@ -969,6 +992,7 @@ function renderGoalsList() {
     }).join('') : '<div class="empty-state"><div class="empty-state-icon">🎯</div><div class="empty-state-text">No goals yet. Set your first financial goal!</div></div>';
     
     document.getElementById('goalsList').innerHTML = goalsHtml;
+    updateBulkActionUI('goals');
 }
 
 // ============ CHARTS ============
@@ -1664,6 +1688,167 @@ async function exportShifts() {
         console.error('Error exporting shifts:', error);
         alert('Error exporting shifts');
     }
+}
+
+// ============ BULK ACTIONS ============
+function toggleSelection(type, id) {
+    const selectedSet = type === 'shifts' ? selectedShifts : 
+                       type === 'expenses' ? selectedExpenses : selectedGoals;
+    
+    if (selectedSet.has(id)) {
+        selectedSet.delete(id);
+    } else {
+        selectedSet.add(id);
+    }
+    
+    // Re-render to update UI
+    if (type === 'shifts') renderShiftsList();
+    else if (type === 'expenses') renderExpensesList();
+    else if (type === 'goals') renderGoalsList();
+}
+
+function toggleSelectAll(type) {
+    const selectedSet = type === 'shifts' ? selectedShifts : 
+                       type === 'expenses' ? selectedExpenses : selectedGoals;
+    const items = type === 'shifts' ? shifts : 
+                 type === 'expenses' ? expenses : goals;
+    
+    if (selectedSet.size === items.length) {
+        // Deselect all
+        selectedSet.clear();
+    } else {
+        // Select all
+        selectedSet.clear();
+        items.forEach(item => selectedSet.add(item.id));
+    }
+    
+    // Re-render to update UI
+    if (type === 'shifts') renderShiftsList();
+    else if (type === 'expenses') renderExpensesList();
+    else if (type === 'goals') renderGoalsList();
+}
+
+function updateBulkActionUI(type) {
+    const selectedSet = type === 'shifts' ? selectedShifts : 
+                       type === 'expenses' ? selectedExpenses : selectedGoals;
+    const count = selectedSet.size;
+    
+    // Construct proper element IDs
+    const typeCapitalized = type.charAt(0).toUpperCase() + type.slice(1);
+    const deleteBtn = document.getElementById(`bulkDelete${typeCapitalized}`);
+    const countSpan = document.getElementById(`selected${typeCapitalized}Count`);
+    const selectAllCheckbox = document.getElementById(`selectAll${typeCapitalized}`);
+    
+    if (deleteBtn) {
+        deleteBtn.style.display = count > 0 ? 'inline-block' : 'none';
+    }
+    
+    if (countSpan) {
+        countSpan.textContent = count > 0 ? `${count} selected` : '';
+    }
+    
+    if (selectAllCheckbox) {
+        const items = type === 'shifts' ? shifts : type === 'expenses' ? expenses : goals;
+        selectAllCheckbox.checked = count === items.length && items.length > 0;
+    }
+}
+
+async function bulkDeleteShifts() {
+    if (selectedShifts.size === 0) return;
+    
+    if (!confirm(`Delete ${selectedShifts.size} selected shift(s)?`)) return;
+    
+    try {
+        const deletePromises = Array.from(selectedShifts).map(id =>
+            authFetch(`${API_URL}/shifts/${id}`, { method: 'DELETE' })
+        );
+        
+        await Promise.all(deletePromises);
+        selectedShifts.clear();
+        await loadAllData();
+    } catch (error) {
+        console.error('Error deleting shifts:', error);
+        alert('Failed to delete some shifts');
+    }
+}
+
+async function bulkDeleteExpenses() {
+    if (selectedExpenses.size === 0) return;
+    
+    if (!confirm(`Delete ${selectedExpenses.size} selected expense(s)?`)) return;
+    
+    try {
+        const deletePromises = Array.from(selectedExpenses).map(id =>
+            authFetch(`${API_URL}/expenses/${id}`, { method: 'DELETE' })
+        );
+        
+        await Promise.all(deletePromises);
+        selectedExpenses.clear();
+        await loadAllData();
+    } catch (error) {
+        console.error('Error deleting expenses:', error);
+        alert('Failed to delete some expenses');
+    }
+}
+
+async function bulkDeleteGoals() {
+    if (selectedGoals.size === 0) return;
+    
+    if (!confirm(`Delete ${selectedGoals.size} selected goal(s)?`)) return;
+    
+    try {
+        const deletePromises = Array.from(selectedGoals).map(id =>
+            authFetch(`${API_URL}/goals/${id}`, { method: 'DELETE' })
+        );
+        
+        await Promise.all(deletePromises);
+        selectedGoals.clear();
+        await loadAllData();
+    } catch (error) {
+        console.error('Error deleting goals:', error);
+        alert('Failed to delete some goals');
+    }
+}
+
+// ============ DRAG AND DROP ============
+function handleDragStart(event, goalId) {
+    draggedGoalId = goalId;
+    event.currentTarget.style.opacity = '0.5';
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/html', event.currentTarget.innerHTML);
+}
+
+function handleDragOver(event) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    return false;
+}
+
+function handleDrop(event, targetGoalId) {
+    event.stopPropagation();
+    event.preventDefault();
+    
+    if (draggedGoalId !== targetGoalId) {
+        // Find indices
+        const draggedIndex = goals.findIndex(g => g.id === draggedGoalId);
+        const targetIndex = goals.findIndex(g => g.id === targetGoalId);
+        
+        if (draggedIndex !== -1 && targetIndex !== -1) {
+            // Reorder array
+            const [draggedGoal] = goals.splice(draggedIndex, 1);
+            goals.splice(targetIndex, 0, draggedGoal);
+            
+            // Re-render
+            renderGoalsList();
+        }
+    }
+    
+    return false;
+}
+
+function handleDragEnd(event) {
+    event.currentTarget.style.opacity = '1';
+    draggedGoalId = null;
 }
 
 // ============ THEME FUNCTIONS ============

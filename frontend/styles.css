@@ -529,6 +529,7 @@ body {
 .list-controls {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 10px;
     margin-bottom: 16px;
     padding: 12px;
@@ -550,6 +551,70 @@ body {
     font-size: 14px;
     cursor: pointer;
     font-family: 'Space Grotesk', sans-serif;
+}
+
+/* Bulk Actions */
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+.selected-row {
+    background: rgba(59, 130, 246, 0.1) !important;
+    border-left: 3px solid var(--primary) !important;
+}
+
+.selected-card {
+    border: 2px solid var(--primary) !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* Drag and Drop */
+.draggable-goal {
+    cursor: move;
+    transition: transform 0.2s, opacity 0.2s;
+    position: relative;
+}
+
+.draggable-goal:hover {
+    transform: translateY(-2px);
+}
+
+.draggable-goal.dragging {
+    opacity: 0.5;
+}
+
+.goal-checkbox {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    z-index: 10;
+}
+
+.goal-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.drag-handle {
+    cursor: move;
+    font-size: 16px;
+    color: var(--gray);
+    opacity: 0.6;
+    transition: opacity 0.2s;
+    user-select: none;
+}
+
+.drag-handle:hover {
+    opacity: 1;
+}
+
+.draggable-container {
+    min-height: 100px;
 }
 
 .dashboard-grid {
