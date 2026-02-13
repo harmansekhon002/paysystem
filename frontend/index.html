@@ -24,7 +24,7 @@
                         <input type="password" id="loginPassword" placeholder="Password" required>
                         <button type="submit">Login</button>
                         <div style="text-align:center; margin-top:15px; font-size:14px;">
-                            Don't have an account? <a href="#" onclick="switchAuthTab('signup')">Sign up</a>
+                            Don't have an account? <a href="#" onclick="event.preventDefault(); switchAuthTab('signup'); return false;">Sign up</a>
                         </div>
                     </form>
                 </div>
@@ -38,7 +38,7 @@
                         <input type="password" id="signupPassword" placeholder="Password (min 6 chars)" required>
                         <button type="submit">Sign Up</button>
                         <div style="text-align:center; margin-top:15px; font-size:14px;">
-                            Have an account? <a href="#" onclick="switchAuthTab('login')">Login</a>
+                            Have an account? <a href="#" onclick="event.preventDefault(); switchAuthTab('login'); return false;">Login</a>
                         </div>
                     </form>
                 </div>

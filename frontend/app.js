@@ -79,7 +79,6 @@ async function handleSignup(event) {
 }
 
 function switchAuthTab(tab) {
-    event.preventDefault();
     const loginTab = document.getElementById('loginTab');
     const signupTab = document.getElementById('signupTab');
     
@@ -147,16 +146,22 @@ async function authFetch(url, options = {}) {
         headers['Authorization'] = `Bearer ${token}`;
     }
     
-    const response = await fetch(url, { ...options, headers });
-    
-    // If 401, user is not authenticated
-    if (response.status === 401) {
-        clearAuth();
-        handleLogout();
-        throw new Error('Session expired. Please login again.');
+    try {
+        const response = await fetch(url, { ...options, headers });
+        
+        // If 401, user is not authenticated
+        if (response.status === 401) {
+            clearAuth();
+            handleLogout();
+            throw new Error('Session expired. Please login again.');
+        }
+        
+        return response;
+    } catch (error) {
+        // Network error or other fetch issues
+        console.error('Fetch error:', error);
+        throw error;
     }
-    
-    return response;
 }
 
 async function loadWorkplaces() {
