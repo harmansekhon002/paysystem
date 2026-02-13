@@ -261,8 +261,15 @@ def init_db():
         cursor.close()
         conn.close()
 
-# Initialize database on startup so gunicorn deployments create tables.
-init_db()
+# Initialize database lazily on first request to avoid import-time issues.
+_db_initialized = False
+
+@app.before_request
+def ensure_db_initialized():
+    global _db_initialized
+    if not _db_initialized:
+        init_db()
+        _db_initialized = True
 
 # ============ QUERY HELPER ============
 class SmartCursor:
