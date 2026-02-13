@@ -1086,7 +1086,7 @@ small {
 /* Reports */
 
 /* Responsive */
-@media (max-width: 1024px) {
+@media (max-width: 768px) {
     .app-shell {
         flex-direction: column;
     }
@@ -1095,18 +1095,27 @@ small {
         width: 100%;
         flex-direction: row;
         align-items: center;
-        flex-wrap: wrap;
     }
     
     .sidebar-nav {
         flex-direction: row;
-        flex-wrap: wrap;
-        gap: 10px;
-        flex: 1 1 100%;
+        gap: 8px;
+        flex: 1;
     }
     
     .tab {
-        flex: 1 1 140px;
+        flex: 1;
+        min-width: 100px;
+    }
+    
+    .brand-text {
+        display: none;
+    }
+    
+    .brand-mark {
+        width: 36px;
+        height: 36px;
+        font-size: 18px;
     }
 }
 
