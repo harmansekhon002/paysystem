@@ -1,1 +1,1 @@
-window.API_URL = 'http://localhost:5001/api';
+window.API_URL = 'https://paysystem-erxo.onrender.com/api';
