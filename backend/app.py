@@ -10,9 +10,6 @@ import re
 app = Flask(__name__)
 CORS(app)
 
-# Initialize database on startup so gunicorn deployments create tables.
-init_db()
-
 # Configuration - Support both SQLite (local) and PostgreSQL (production)
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
 JWT_SECRET = os.environ.get('JWT_SECRET', 'payroll-system-secret-key-with-sufficient-length-32-bytes')
@@ -263,6 +260,9 @@ def init_db():
     finally:
         cursor.close()
         conn.close()
+
+# Initialize database on startup so gunicorn deployments create tables.
+init_db()
 
 # ============ QUERY HELPER ============
 class SmartCursor:
