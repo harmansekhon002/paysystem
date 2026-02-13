@@ -1,5 +1,8 @@
 // API Configuration
-window.API_URL = 'https://paysystem-erxo.onrender.com/api';
+// Use localhost for development, production URL for deployment
+window.API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:5001/api'
+    : 'https://paysystem-erxo.onrender.com/api';
 
 // Local storage keys
 const AUTH_TOKEN_KEY = 'payroll_auth_token';

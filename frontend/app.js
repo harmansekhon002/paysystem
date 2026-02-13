@@ -147,7 +147,7 @@ async function authFetch(url, options = {}) {
         headers['Authorization'] = `Bearer ${token}`;
     }
     
-    const response = await authFetch(url, { ...options, headers });
+    const response = await fetch(url, { ...options, headers });
     
     // If 401, user is not authenticated
     if (response.status === 401) {
