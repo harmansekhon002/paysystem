@@ -434,6 +434,32 @@ body {
     margin-bottom: 24px;
 }
 
+.list-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding: 12px;
+    background: var(--light-gray);
+    border-radius: var(--radius);
+}
+
+.list-controls label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--gray);
+}
+
+.list-controls select {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: white;
+    font-size: 14px;
+    cursor: pointer;
+    font-family: 'Space Grotesk', sans-serif;
+}
+
 .dashboard-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));

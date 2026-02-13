@@ -230,6 +230,17 @@
                     </div>
                 </div>
                 
+                <div class="list-controls">
+                    <label>Sort by:</label>
+                    <select id="shiftsSort" onchange="sortAndRenderShifts()">
+                        <option value="date-desc">Date (Newest First)</option>
+                        <option value="date-asc">Date (Oldest First)</option>
+                        <option value="pay-desc">Pay (Highest First)</option>
+                        <option value="pay-asc">Pay (Lowest First)</option>
+                        <option value"hours-desc">Hours (Most First)</option>
+                    </select>
+                </div>
+                
                 <div id="shiftsList" class="table-container"></div>
             </div>
         </div>
@@ -252,6 +263,18 @@
                     <h2>Financial Goals</h2>
                     <button class="btn btn-primary" onclick="showGoalModal()">+ Add Goal</button>
                 </div>
+                
+                <div class="list-controls">
+                    <label>Sort by:</label>
+                    <select id="goalsSort" onchange="sortAndRenderGoals()">
+                        <option value="priority">Priority</option>
+                        <option value="deadline">Deadline</option>
+                        <option value="progress-desc">Progress (Highest First)</option>
+                        <option value="progress-asc">Progress (Lowest First)</option>
+                        <option value="target-desc">Target (Highest First)</option>
+                    </select>
+                </div>
+                
                 <div id="goalsList" class="goals-container"></div>
             </div>
         </div>
@@ -263,6 +286,18 @@
                     <h2>Budget & Expenses</h2>
                     <button class="btn btn-primary" onclick="showExpenseModal()">+ Add Expense</button>
                 </div>
+                
+                <div class="list-controls">
+                    <label>Sort by:</label>
+                    <select id="expensesSort" onchange="sortAndRenderExpenses()">
+                        <option value="date-desc">Date (Newest First)</option>
+                        <option value="date-asc">Date (Oldest First)</option>
+                        <option value="amount-desc">Amount (Highest First)</option>
+                        <option value="amount-asc">Amount (Lowest First)</option>
+                        <option value="category">Category</option>
+                    </select>
+                </div>
+                
                 <div id="expensesList" class="table-container"></div>
             </div>
         </div>

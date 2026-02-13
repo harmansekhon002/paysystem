@@ -646,6 +646,98 @@ function renderUsageStats() {
     if (container) container.innerHTML = html;
 }
 
+// ============ SORTING FUNCTIONS ============
+function sortAndRenderShifts() {
+    const sortValue = document.getElementById('shiftsSort').value;
+    const [field, order] = sortValue.split('-');
+    
+    shifts.sort((a, b) => {
+        let compareA, compareB;
+        
+        if (field === 'date') {
+            compareA = new Date(a.date);
+            compareB = new Date(b.date);
+        } else if (field === 'pay') {
+            compareA = a.total_pay;
+            compareB = b.total_pay;
+        } else if (field === 'hours') {
+            compareA = a.hours;
+            compareB = b.hours;
+        }
+        
+        if (order === 'asc') {
+            return compareA > compareB ? 1 : -1;
+        } else {
+            return compareA < compareB ? 1 : -1;
+        }
+    });
+    
+    renderShiftsList();
+}
+
+function sortAndRenderExpenses() {
+    const sortValue = document.getElementById('expensesSort').value;
+    const [field, order] = sortValue.split('-');
+    
+    expenses.sort((a, b) => {
+        let compareA, compareB;
+        
+        if (field === 'date') {
+            compareA = new Date(a.due_date || a.created_at || '1970-01-01');
+            compareB = new Date(b.due_date || b.created_at || '1970-01-01');
+        } else if (field === 'amount') {
+            compareA = a.amount;
+            compareB = b.amount;
+        } else if (field === 'category') {
+            compareA = a.category.toLowerCase();
+            compareB = b.category.toLowerCase();
+            return compareA > compareB ? 1 : -1;
+        }
+        
+        if (order === 'asc') {
+            return compareA > compareB ? 1 : -1;
+        } else {
+            return compareA < compareB ? 1 : -1;
+        }
+    });
+    
+    renderExpensesList();
+}
+
+function sortAndRenderGoals() {
+    const sortValue = document.getElementById('goalsSort').value;
+    const [field, order] = sortValue.split('-');
+    
+    goals.sort((a, b) => {
+        let compareA, compareB;
+        
+        if (field === 'priority') {
+            const priorityOrder = { 'high': 0, 'medium': 1, 'low': 2 };
+            compareA = priorityOrder[a.priority] || 999;
+            compareB = priorityOrder[b.priority] || 999;
+            return compareA - compareB;
+        } else if (field === 'deadline') {
+            compareA = new Date(a.deadline || '2099-12-31');
+            compareB = new Date(b.deadline || '2099-12-31');
+            return compareA - compareB;
+        } else if (field === 'progress') {
+            compareA = a.progress || 0;
+            compareB = b.progress || 0;
+        } else if (field === 'target') {
+            compareA = a.target_amount || 0;
+            compareB = b.target_amount || 0;
+        }
+        
+        if (order === 'asc') {
+            return compareA > compareB ? 1 : -1;
+        } else {
+            return compareA < compareB ? 1 : -1;
+        }
+    });
+    
+    renderGoalsList();
+}
+
 function renderShiftsList() {
     const shiftsHtml = shifts.length > 0 ? `
         <table>
