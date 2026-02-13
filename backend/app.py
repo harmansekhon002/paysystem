@@ -10,6 +10,9 @@ import re
 app = Flask(__name__)
 CORS(app)
 
+# Initialize database on startup so gunicorn deployments create tables.
+init_db()
+
 # Configuration - Support both SQLite (local) and PostgreSQL (production)
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
 JWT_SECRET = os.environ.get('JWT_SECRET', 'payroll-system-secret-key-with-sufficient-length-32-bytes')
@@ -1357,6 +1360,5 @@ def internal_error(e):
 
 # ============ APP INITIALIZATION ============
 if __name__ == '__main__':
-    init_db()
     port = int(os.environ.get('PORT', 5001))
     app.run(host='0.0.0.0', port=port, debug=False)
