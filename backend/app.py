@@ -57,6 +57,7 @@ def init_db():
                     password_hash VARCHAR(255) NOT NULL,
                     name VARCHAR(255) NOT NULL,
                     role VARCHAR(50) DEFAULT 'employee',
+                    budget_limit REAL DEFAULT 5000.0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )''',
                 '''CREATE TABLE IF NOT EXISTS workplaces (
@@ -92,7 +93,10 @@ def init_db():
                     category VARCHAR(100) NOT NULL,
                     amount REAL NOT NULL,
                     due_date TEXT,
-                    is_recurring BOOLEAN DEFAULT TRUE,
+                    is_recurring BOOLEAN DEFAULT FALSE,
+                    recurrence_type VARCHAR(50),
+                    recurrence_end_date TEXT,
+                    next_occurrence TEXT,
                     notes TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
@@ -120,6 +124,16 @@ def init_db():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
                     FOREIGN KEY (goal_id) REFERENCES goals (id)
+                )''',
+                '''CREATE TABLE IF NOT EXISTS categories (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    name VARCHAR(100) NOT NULL,
+                    type VARCHAR(20) NOT NULL,
+                    icon VARCHAR(10),
+                    color VARCHAR(7),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
                 )'''
             ]
         else:
@@ -131,6 +145,7 @@ def init_db():
                     password_hash TEXT NOT NULL,
                     name TEXT NOT NULL,
                     role TEXT DEFAULT 'employee',
+                    budget_limit REAL DEFAULT 5000.0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )''',
                 '''CREATE TABLE IF NOT EXISTS workplaces (
@@ -166,7 +181,10 @@ def init_db():
                     category TEXT NOT NULL,
                     amount REAL NOT NULL,
                     due_date TEXT,
-                    is_recurring BOOLEAN DEFAULT 1,
+                    is_recurring BOOLEAN DEFAULT 0,
+                    recurrence_type TEXT,
+                    recurrence_end_date TEXT,
+                    next_occurrence TEXT,
                     notes TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
@@ -194,11 +212,45 @@ def init_db():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
                     FOREIGN KEY (goal_id) REFERENCES goals (id)
+                )''',
+                '''CREATE TABLE IF NOT EXISTS categories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    icon TEXT,
+                    color TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
                 )'''
             ]
         
         for sql in sql_statements:
             cursor.execute(sql)
+        
+        # Schema migrations - add columns if they don't exist
+        try:
+            if DB_TYPE == 'postgres':
+                cursor.execute("ALTER TABLE users ADD COLUMN budget_limit REAL DEFAULT 5000.0")
+            else:
+                cursor.execute("ALTER TABLE users ADD COLUMN budget_limit REAL DEFAULT 5000.0")
+        except:
+            # Column already exists, skip
+            pass
+        
+        # Add recurring expense columns to expenses table
+        try:
+            if DB_TYPE == 'postgres':
+                cursor.execute("ALTER TABLE expenses ADD COLUMN recurrence_type VARCHAR(50)")
+                cursor.execute("ALTER TABLE expenses ADD COLUMN recurrence_end_date TEXT")
+                cursor.execute("ALTER TABLE expenses ADD COLUMN next_occurrence TEXT")
+            else:
+                cursor.execute("ALTER TABLE expenses ADD COLUMN recurrence_type TEXT")
+                cursor.execute("ALTER TABLE expenses ADD COLUMN recurrence_end_date TEXT")
+                cursor.execute("ALTER TABLE expenses ADD COLUMN next_occurrence TEXT")
+        except:
+            # Columns already exist, skip
+            pass
         
         conn.commit()
         print("✓ Database tables initialized successfully")
@@ -682,22 +734,43 @@ def create_expense():
     cursor = conn.cursor()
     
     try:
+        # Calculate next occurrence date for recurring expenses
+        next_occurrence = None
+        if data.get('is_recurring'):
+            from dateutil.relativedelta import relativedelta
+            try:
+                base_date = datetime.strptime(data.get('due_date', datetime.now().strftime('%Y-%m-%d')), '%Y-%m-%d')
+                recurrence_type = data.get('recurrence_type', 'monthly')
+                
+                if recurrence_type == 'weekly':
+                    next_occurrence = (base_date + timedelta(weeks=1)).strftime('%Y-%m-%d')
+                elif recurrence_type == 'monthly':
+                    next_occurrence = (base_date + relativedelta(months=1)).strftime('%Y-%m-%d')
+                elif recurrence_type == 'yearly':
+                    next_occurrence = (base_date + relativedelta(years=1)).strftime('%Y-%m-%d')
+            except:
+                next_occurrence = None
+        
         cursor.execute('''
-            INSERT INTO expenses (user_id, category, amount, due_date, is_recurring, notes)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO expenses (user_id, category, amount, due_date, is_recurring, 
+                                 recurrence_type, recurrence_end_date, next_occurrence, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             request.user_id,
             data['category'],
             data['amount'],
             data.get('due_date'),
-            data.get('is_recurring', True),
+            data.get('is_recurring', False),
+            data.get('recurrence_type'),
+            data.get('recurrence_end_date'),
+            next_occurrence,
             data.get('notes', '')
         ))
         
         expense_id = cursor.lastrowid
         conn.commit()
         
-        return jsonify({'id': expense_id, 'success': True}), 201
+        return jsonify({'id': expense_id, 'success': True, 'next_occurrence': next_occurrence}), 201
     
     except Exception as e:
         conn.rollback()
@@ -829,6 +902,61 @@ def delete_goal(goal_id):
         cursor.close()
         conn.close()
 
+# ============ MILESTONES TRACKING ============
+@app.route('/api/goals/milestones', methods=['GET'])
+@token_required
+def get_milestones():
+    """Get goals with milestone tracking analytics"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            SELECT id, name, target_amount, current_amount, deadline, priority, notes
+            FROM goals WHERE user_id = ? ORDER BY priority, deadline
+        ''', (request.user_id,))
+        
+        milestones = []
+        for row in cursor.fetchall():
+            goal_id, name, target, current, deadline, priority, notes = row
+            
+            progress_percentage = (current / target * 100) if target > 0 else 0
+            remaining = target - current
+            
+            # Determine status milestones
+            status = 'not_started'
+            if progress_percentage >= 100:
+                status = 'completed'
+            elif progress_percentage >= 75:
+                status = 'almost_there'
+            elif progress_percentage >= 50:
+                status = 'halfway'
+            elif progress_percentage >= 25:
+                status = 'in_progress'
+            elif progress_percentage > 0:
+                status = 'just_started'
+            
+            milestones.append({
+                'id': goal_id,
+                'name': name,
+                'target_amount': target,
+                'current_amount': current,
+                'remaining': remaining,
+                'progress_percentage': round(progress_percentage, 2),
+                'deadline': deadline,
+                'priority': priority,
+                'status': status,
+                'notes': notes
+            })
+        
+        return jsonify(milestones), 200
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
 # ============ SUMMARY & STATS ENDPOINTS ============
 @app.route('/api/summary/fortnight', methods=['GET'])
 @token_required
@@ -868,6 +996,298 @@ def get_fortnight_summary():
         cursor.close()
         conn.close()
 
+
+# ============ BUDGET ENDPOINTS ============
+@app.route('/api/budget', methods=['GET'])
+@token_required
+def get_budget():
+    """Get budget limit and current spending"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Get user's budget limit
+        cursor.execute('SELECT budget_limit FROM users WHERE id = ?', (request.user_id,))
+        result = cursor.fetchone()
+        budget_limit = result[0] if result else 5000.0
+        
+        # Get total expenses
+        cursor.execute('SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE user_id = ?', (request.user_id,))
+        total_spent = cursor.fetchone()[0]
+        
+        # Calculate remaining and percentage
+        remaining = budget_limit - total_spent
+        percentage_used = (total_spent / budget_limit * 100) if budget_limit > 0 else 0
+        
+        return jsonify({
+            'budget_limit': budget_limit,
+            'total_spent': total_spent,
+            'remaining': remaining,
+            'percentage_used': round(percentage_used, 2),
+            'warning': total_spent > budget_limit * 0.8,  # Alert if >80% spent
+            'exceeded': total_spent > budget_limit
+        }), 200
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/budget', methods=['POST'])
+@token_required
+def set_budget():
+    """Set user's budget limit"""
+    data = request.get_json()
+    budget_limit = data.get('budget_limit')
+    
+    # Validate
+    if budget_limit is None:
+        return jsonify({'error': 'budget_limit is required'}), 400
+    
+    try:
+        budget_limit = float(budget_limit)
+        if budget_limit < 0:
+            return jsonify({'error': 'budget_limit must be non-negative'}), 400
+    except (TypeError, ValueError):
+        return jsonify({'error': 'budget_limit must be a valid number'}), 400
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('UPDATE users SET budget_limit = ? WHERE id = ?', (budget_limit, request.user_id))
+        conn.commit()
+        
+        return jsonify({
+            'success': True,
+            'budget_limit': budget_limit,
+            'message': f'Budget limit set to ${budget_limit:.2f}'
+        }), 200
+    
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# ============ CATEGORY ENDPOINTS ============
+@app.route('/api/categories', methods=['GET'])
+@token_required
+def get_categories():
+    """Get all categories for user"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            SELECT id, name, type, icon, color
+            FROM categories
+            WHERE user_id = ?
+            ORDER BY name
+        ''', (request.user_id,))
+        
+        categories = []
+        for row in cursor.fetchall():
+            categories.append({
+                'id': row[0],
+                'name': row[1],
+                'type': row[2],
+                'icon': row[3],
+                'color': row[4]
+            })
+        
+        return jsonify(categories), 200
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/categories', methods=['POST'])
+@token_required
+def create_category():
+    """Create custom category"""
+    data = request.get_json()
+    
+    # Validation
+    if not data.get('name'):
+        return jsonify({'error': 'Category name is required'}), 400
+    if not data.get('type') or data.get('type') not in ['expense', 'income']:
+        return jsonify({'error': 'Type must be "expense" or "income"'}), 400
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            INSERT INTO categories (user_id, name, type, icon, color)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (
+            request.user_id,
+            data['name'],
+            data['type'],
+            data.get('icon', '📁'),
+            data.get('color', '#3b82f6')
+        ))
+        
+        category_id = cursor.lastrowid
+        conn.commit()
+        
+        return jsonify({'id': category_id, 'success': True}), 201
+    
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/categories/<int:category_id>', methods=['DELETE'])
+@token_required
+def delete_category(category_id):
+    """Delete category"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Verify ownership
+        cursor.execute('SELECT user_id FROM categories WHERE id = ?', (category_id,))
+        result = cursor.fetchone()
+        if not result or result[0] != request.user_id:
+            return jsonify({'error': 'Unauthorized'}), 403
+        
+        cursor.execute('DELETE FROM categories WHERE id = ?', (category_id,))
+        conn.commit()
+        
+        return jsonify({'success': True}), 200
+    
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/expenses/process-recurring', methods=['POST'])
+@token_required
+def process_recurring_expenses():
+    """Process recurring expenses - create new instances if due"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        from dateutil.relativedelta import relativedelta
+        today = datetime.now().strftime('%Y-%m-%d')
+        created_count = 0
+        
+        # Get all recurring expenses where next_occurrence is today or before
+        cursor.execute('''
+            SELECT id, category, amount, recurrence_type, next_occurrence, recurrence_end_date, notes
+            FROM expenses
+            WHERE user_id = ? AND is_recurring = ? AND next_occurrence <= ?
+        ''', (request.user_id, True, today))
+        
+        due_expenses = cursor.fetchall()
+        
+        for expense in due_expenses:
+            expense_id, category, amount, recurrence_type, next_occurrence, recurrence_end_date, notes = expense
+            
+            # Skip if past end date
+            if recurrence_end_date and next_occurrence > recurrence_end_date:
+                continue
+            
+            # Create new expense for this occurrence
+            cursor.execute('''
+                INSERT INTO expenses (user_id, category, amount, due_date, is_recurring, notes)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (request.user_id, category, amount, next_occurrence, False, f'Auto-generated from recurring expense'))
+            created_count += 1
+            
+            # Calculate next occurrence
+            current_date = datetime.strptime(next_occurrence, '%Y-%m-%d')
+            new_next_occurrence = None
+            
+            if recurrence_type == 'weekly':
+                new_next_occurrence = (current_date + timedelta(weeks=1)).strftime('%Y-%m-%d')
+            elif recurrence_type == 'monthly':
+                new_next_occurrence = (current_date + relativedelta(months=1)).strftime('%Y-%m-%d')
+            elif recurrence_type == 'yearly':
+                new_next_occurrence = (current_date + relativedelta(years=1)).strftime('%Y-%m-%d')
+            
+            # Update the recurring expense with new next_occurrence
+            if new_next_occurrence:
+                cursor.execute('''
+                    UPDATE expenses SET next_occurrence = ? WHERE id = ?
+                ''', (new_next_occurrence, expense_id))
+        
+        conn.commit()
+        
+        return jsonify({
+            'success': True,
+            'created_count': created_count,
+            'message': f'Processed {created_count} recurring expense(s)'
+        }), 200
+    
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# ============ TAX CALCULATOR ENDPOINT ============
+@app.route('/api/tax/calculate', methods=['POST'])
+@token_required
+def calculate_tax():
+    """Calculate tax based on income (simplified Australian tax rates)"""
+    data = request.get_json()
+    
+    annual_income = data.get('annual_income')
+    if annual_income is None:
+        return jsonify({'error': 'annual_income is required'}), 400
+    
+    try:
+        annual_income = float(annual_income)
+        if annual_income < 0:
+            return jsonify({'error': 'annual_income must be non-negative'}), 400
+    except (TypeError, ValueError):
+        return jsonify({'error': 'annual_income must be a valid number'}), 400
+    
+    # Simplified Australian Tax Brackets (2026) - example rates
+    tax = 0
+    
+    if annual_income <= 18200:
+        tax = 0
+    elif annual_income <= 45000:
+        tax = (annual_income - 18200) * 0.19
+    elif annual_income <= 120000:
+        tax = 5092 + (annual_income - 45000) * 0.325
+    elif annual_income <= 180000:
+        tax = 29467 + (annual_income - 120000) * 0.37
+    else:
+        tax = 51667 + (annual_income - 180000) * 0.45
+    
+    # Medicare Levy (2%)
+    medicare_levy = annual_income * 0.02 if annual_income > 23226 else 0
+    
+    total_tax = tax + medicare_levy
+    net_income = annual_income - total_tax
+    effective_tax_rate = (total_tax / annual_income * 100) if annual_income > 0 else 0
+    
+    return jsonify({
+        'annual_income': annual_income,
+        'income_tax': round(tax, 2),
+        'medicare_levy': round(medicare_levy, 2),
+        'total_tax': round(total_tax, 2),
+        'net_income': round(net_income, 2),
+        'effective_tax_rate': round(effective_tax_rate, 2),
+        'monthly_net': round(net_income / 12, 2),
+        'fortnightly_net': round(net_income / 26, 2)
+    }), 200
+
 @app.route('/api/stats', methods=['GET'])
 @token_required
 def get_stats():
@@ -896,12 +1316,21 @@ def get_stats():
         cursor.execute('SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE user_id = ?', (request.user_id,))
         fortnight_expenses = cursor.fetchone()[0]
         
+        # Budget info
+        cursor.execute('SELECT budget_limit FROM users WHERE id = ?', (request.user_id,))
+        budget_result = cursor.fetchone()
+        budget_limit = budget_result[0] if budget_result else 5000.0
+        budget_remaining = budget_limit - fortnight_expenses
+        
         return jsonify({
             'total_earned': total_earned,
             'total_hours': total_hours,
             'active_goals': active_goals,
             'goals_saved': goals_saved,
             'fortnight_expenses': fortnight_expenses,
+            'budget_limit': budget_limit,
+            'budget_remaining': budget_remaining,
+            'budget_exceeded': fortnight_expenses > budget_limit,
             'this_week': {'earned': 0, 'hours': 0, 'shifts': 0},
             'average_rate': total_earned / max(total_hours, 1) if total_hours > 0 else 0
         }), 200
