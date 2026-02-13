@@ -8,10 +8,111 @@ let goals = [];
 let fortnightSummary = {};
 let stats = {};
 
+// ============ AUTHENTICATION ============
+async function handleLogin(event) {
+    event.preventDefault();
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+    const errorEl = document.getElementById('authError');
+    
+    try {
+        const response = await authFetch(`${API_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Login failed');
+        }
+        
+        // Store token and user
+        setAuthToken(data.token);
+        setStoredUser(data.user);
+        
+        // Hide auth screen and load app
+        document.getElementById('authScreen').classList.remove('active');
+        await loadAllData();
+        setupEventListeners();
+        errorEl.classList.remove('show');
+    } catch (error) {
+        errorEl.textContent = error.message;
+        errorEl.classList.add('show');
+    }
+}
+
+async function handleSignup(event) {
+    event.preventDefault();
+    const name = document.getElementById('signupName').value;
+    const email = document.getElementById('signupEmail').value;
+    const password = document.getElementById('signupPassword').value;
+    const errorEl = document.getElementById('authError');
+    
+    try {
+        const response = await authFetch(`${API_URL}/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password, name })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Signup failed');
+        }
+        
+        // Store token and user
+        setAuthToken(data.token);
+        setStoredUser(data.user);
+        
+        // Hide auth screen and load app
+        document.getElementById('authScreen').classList.remove('active');
+        await loadAllData();
+        setupEventListeners();
+        errorEl.classList.remove('show');
+    } catch (error) {
+        errorEl.textContent = error.message;
+        errorEl.classList.add('show');
+    }
+}
+
+function switchAuthTab(tab) {
+    event.preventDefault();
+    const loginTab = document.getElementById('loginTab');
+    const signupTab = document.getElementById('signupTab');
+    
+    if (tab === 'login') {
+        loginTab.classList.add('active');
+        signupTab.classList.remove('active');
+    } else {
+        signupTab.classList.add('active');
+        loginTab.classList.remove('active');
+    }
+    
+    document.getElementById('authError').classList.remove('show');
+}
+
+function handleLogout() {
+    clearAuth();
+    document.getElementById('authScreen').classList.add('active');
+    document.getElementById('loginEmail').value = '';
+    document.getElementById('loginPassword').value = '';
+    document.getElementById('signupName').value = '';
+    document.getElementById('signupEmail').value = '';
+    document.getElementById('signupPassword').value = '';
+}
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', async () => {
-    await loadAllData();
-    setupEventListeners();
+    if (isLoggedIn()) {
+        document.getElementById('authScreen').classList.remove('active');
+        await loadAllData();
+        setupEventListeners();
+    } else {
+        document.getElementById('authScreen').classList.add('active');
+    }
 });
 
 // Load all data
@@ -27,10 +128,40 @@ async function loadAllData() {
     renderAll();
 }
 
-// API Calls
+// API Calls with Auth Header
+function getAuthHeaders() {
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getAuthToken()}`
+    };
+}
+// Smart fetch with auto-auth headers
+async function authFetch(url, options = {}) {
+    const headers = {
+        'Content-Type': 'application/json',
+        ...options.headers
+    };
+    
+    const token = getAuthToken();
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const response = await authFetch(url, { ...options, headers });
+    
+    // If 401, user is not authenticated
+    if (response.status === 401) {
+        clearAuth();
+        handleLogout();
+        throw new Error('Session expired. Please login again.');
+    }
+    
+    return response;
+}
+
 async function loadWorkplaces() {
     try {
-        const response = await fetch(`${API_URL}/workplaces`);
+        const response = await authFetch(`${API_URL}/workplaces`);
         workplaces = await response.json();
     } catch (error) {
         console.error('Error loading workplaces:', error);
@@ -39,7 +170,7 @@ async function loadWorkplaces() {
 
 async function loadShifts() {
     try {
-        const response = await fetch(`${API_URL}/shifts`);
+        const response = await authFetch(`${API_URL}/shifts`);
         shifts = await response.json();
     } catch (error) {
         console.error('Error loading shifts:', error);
@@ -48,7 +179,7 @@ async function loadShifts() {
 
 async function loadExpenses() {
     try {
-        const response = await fetch(`${API_URL}/expenses`);
+        const response = await authFetch(`${API_URL}/expenses`);
         expenses = await response.json();
     } catch (error) {
         console.error('Error loading expenses:', error);
@@ -57,7 +188,7 @@ async function loadExpenses() {
 
 async function loadGoals() {
     try {
-        const response = await fetch(`${API_URL}/goals`);
+        const response = await authFetch(`${API_URL}/goals`);
         goals = await response.json();
     } catch (error) {
         console.error('Error loading goals:', error);
@@ -66,7 +197,7 @@ async function loadGoals() {
 
 async function loadFortnightSummary() {
     try {
-        const response = await fetch(`${API_URL}/summary/fortnight`);
+        const response = await authFetch(`${API_URL}/summary/fortnight`);
         fortnightSummary = await response.json();
     } catch (error) {
         console.error('Error loading fortnight summary:', error);
@@ -75,7 +206,7 @@ async function loadFortnightSummary() {
 
 async function loadStats() {
     try {
-        const response = await fetch(`${API_URL}/stats`);
+        const response = await authFetch(`${API_URL}/stats`);
         stats = await response.json();
     } catch (error) {
         console.error('Error loading stats:', error);
@@ -931,7 +1062,7 @@ async function saveShift() {
     const method = id ? 'PUT' : 'POST';
     
     try {
-        await fetch(url, {
+        await authFetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
@@ -960,7 +1091,7 @@ async function saveWorkplace() {
     const method = id ? 'PUT' : 'POST';
     
     try {
-        await fetch(url, {
+        await authFetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
@@ -988,7 +1119,7 @@ async function saveExpense() {
     const method = id ? 'PUT' : 'POST';
     
     try {
-        await fetch(url, {
+        await authFetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
@@ -1018,7 +1149,7 @@ async function deleteShift(id) {
     if (!confirm('Are you sure you want to delete this shift?')) return;
     
     try {
-        await fetch(`${API_URL}/shifts/${id}`, { method: 'DELETE' });
+        await authFetch(`${API_URL}/shifts/${id}`, { method: 'DELETE' });
         await loadAllData();
     } catch (error) {
         console.error('Error deleting shift:', error);
@@ -1030,7 +1161,7 @@ async function deleteWorkplace(id) {
     if (!confirm('Are you sure you want to delete this workplace?')) return;
     
     try {
-        await fetch(`${API_URL}/workplaces/${id}`, { method: 'DELETE' });
+        await authFetch(`${API_URL}/workplaces/${id}`, { method: 'DELETE' });
         await loadAllData();
     } catch (error) {
         console.error('Error deleting workplace:', error);
@@ -1042,7 +1173,7 @@ async function deleteExpense(id) {
     if (!confirm('Are you sure you want to delete this expense?')) return;
     
     try {
-        await fetch(`${API_URL}/expenses/${id}`, { method: 'DELETE' });
+        await authFetch(`${API_URL}/expenses/${id}`, { method: 'DELETE' });
         await loadAllData();
     } catch (error) {
         console.error('Error deleting expense:', error);
@@ -1065,7 +1196,7 @@ async function saveGoal() {
     const method = id ? 'PUT' : 'POST';
     
     try {
-        await fetch(url, {
+        await authFetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
@@ -1088,7 +1219,7 @@ async function saveContribution() {
     };
     
     try {
-        await fetch(`${API_URL}/goals/${goalId}/contribute`, {
+        await authFetch(`${API_URL}/goals/${goalId}/contribute`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
@@ -1110,7 +1241,7 @@ async function deleteGoal(id) {
     if (!confirm('Are you sure you want to delete this goal? All contributions will also be deleted.')) return;
     
     try {
-        await fetch(`${API_URL}/goals/${id}`, { method: 'DELETE' });
+        await authFetch(`${API_URL}/goals/${id}`, { method: 'DELETE' });
         await loadAllData();
     } catch (error) {
         console.error('Error deleting goal:', error);
@@ -1153,7 +1284,7 @@ async function searchShifts() {
     if (workplaceId) params.append('workplace_id', workplaceId);
     
     try {
-        const response = await fetch(`${API_URL}/search/shifts?${params}`);
+        const response = await authFetch(`${API_URL}/search/shifts?${params}`);
         shifts = await response.json();
         renderShiftsList();
     } catch (error) {
@@ -1171,7 +1302,7 @@ async function clearSearch() {
 
 async function exportShifts() {
     try {
-        const response = await fetch(`${API_URL}/export/shifts`);
+        const response = await authFetch(`${API_URL}/export/shifts`);
         const csv = await response.text();
         
         const blob = new Blob([csv], { type: 'text/csv' });

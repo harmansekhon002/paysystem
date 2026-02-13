@@ -7,7 +7,50 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <!-- Auth Screen -->
+    <div id="authScreen" class="auth-screen active">
+        <div class="auth-container">
+            <div class="auth-box">
+                <div class="auth-header">
+                    <h1>💰 Payroll Manager</h1>
+                    <p>Track shifts, expenses, and goals</p>
+                </div>
+                
+                <!-- Login Tab -->
+                <div id="loginTab" class="auth-form-container active">
+                    <form id="loginForm" onsubmit="handleLogin(event)">
+                        <h2>Login</h2>
+                        <input type="email" id="loginEmail" placeholder="Email" required>
+                        <input type="password" id="loginPassword" placeholder="Password" required>
+                        <button type="submit">Login</button>
+                        <div style="text-align:center; margin-top:15px; font-size:14px;">
+                            Don't have an account? <a href="#" onclick="switchAuthTab('signup')">Sign up</a>
+                        </div>
+                    </form>
+                </div>
+                
+                <!-- Signup Tab -->
+                <div id="signupTab" class="auth-form-container">
+                    <form id="signupForm" onsubmit="handleSignup(event)">
+                        <h2>Create Account</h2>
+                        <input type="text" id="signupName" placeholder="Full Name" required>
+                        <input type="email" id="signupEmail" placeholder="Email" required>
+                        <input type="password" id="signupPassword" placeholder="Password (min 6 chars)" required>
+                        <button type="submit">Sign Up</button>
+                        <div style="text-align:center; margin-top:15px; font-size:14px;">
+                            Have an account? <a href="#" onclick="switchAuthTab('login')">Login</a>
+                        </div>
+                    </form>
+                </div>
+                
+                <div id="authError" class="auth-error"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
     <div class="app-shell">
+
         <aside class="sidebar">
             <div class="brand">
                 <div class="brand-mark">💰</div>
@@ -41,7 +84,7 @@
             </nav>
 
             <div class="sidebar-foot">
-                <div class="sidebar-hint">Clean overview. Full detail inside each section.</div>
+                <button class="logout-btn" onclick="handleLogout()">🚪 Logout</button>
             </div>
         </aside>
 
