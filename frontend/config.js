@@ -1,6 +1,10 @@
 // API Configuration
 // Use localhost for development, production URL for deployment
-window.API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+const isLocalHost = window.location.hostname === 'localhost'
+    || window.location.hostname === '127.0.0.1'
+    || window.location.protocol === 'file:';
+
+window.API_URL = isLocalHost
     ? 'http://localhost:5001/api'
     : 'https://paysystem-erxo.onrender.com/api';
 
