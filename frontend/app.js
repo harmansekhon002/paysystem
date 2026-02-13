@@ -153,9 +153,10 @@ async function authFetch(url, options = {}) {
     
     try {
         const response = await fetch(url, { ...options, headers });
+        const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register');
         
         // If 401, user is not authenticated
-        if (response.status === 401) {
+        if (response.status === 401 && !isAuthEndpoint) {
             clearAuth();
             handleLogout();
             throw new Error('Session expired. Please login again.');
