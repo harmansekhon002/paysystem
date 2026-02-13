@@ -46,6 +46,7 @@ def init_db():
     """Initialize database tables"""
     conn = get_db()
     cursor = conn.cursor()
+    success = False
     
     try:
         if DB_TYPE == 'postgres':
@@ -254,12 +255,14 @@ def init_db():
         
         conn.commit()
         print("✓ Database tables initialized successfully")
+        success = True
     except Exception as e:
         print(f"Error initializing database: {e}")
         conn.rollback()
     finally:
         cursor.close()
         conn.close()
+    return success
 
 # Initialize database lazily on first request to avoid import-time issues.
 _db_initialized = False
@@ -267,9 +270,35 @@ _db_initialized = False
 @app.before_request
 def ensure_db_initialized():
     global _db_initialized
-    if not _db_initialized:
-        init_db()
-        _db_initialized = True
+    if _db_initialized:
+        return
+
+    exists = False
+    conn = None
+    cursor = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        if DB_TYPE == 'postgres':
+            cursor.execute("SELECT to_regclass('public.users')")
+            exists = cursor.fetchone()[0] is not None
+        else:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+            exists = cursor.fetchone() is not None
+    except Exception as e:
+        print(f"Database preflight error: {e}")
+        exists = False
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+    if not exists:
+        if not init_db():
+            return jsonify({'error': 'Database initialization failed'}), 500
+
+    _db_initialized = True
 
 # ============ QUERY HELPER ============
 class SmartCursor:
