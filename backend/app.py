@@ -1,644 +1,936 @@
 import os
+import jwt
+import bcrypt
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime, timedelta
-import sqlite3
-import json
-from dateutil import parser
+from functools import wraps
+import re
 
 app = Flask(__name__)
 CORS(app)
 
-import os
-DATABASE = os.path.join(os.path.dirname(__file__), 'payroll.db')
+# Configuration - Support both SQLite (local) and PostgreSQL (production)
+DATABASE_URL = os.environ.get('DATABASE_URL', '')
+JWT_SECRET = os.environ.get('JWT_SECRET', 'payroll-system-secret-key')
+JWT_EXPIRATION = 86400 * 7  # 7 days
 
-# Australian public holidays 2026 (can be updated yearly)
-PUBLIC_HOLIDAYS = [
-    '2026-01-01', '2026-01-26', '2026-04-03', '2026-04-04', '2026-04-06', '2026-04-25',
-    '2026-06-08', '2026-12-25', '2026-12-26', '2026-12-28'
-]
+# Determine database type
+if DATABASE_URL:
+    # Production: Use PostgreSQL
+    import psycopg2
+    DB_TYPE = 'postgres'
+else:
+    # Local development: Use SQLite
+    import sqlite3
+    DB_TYPE = 'sqlite'
+    DATABASE_PATH = os.path.join(os.path.dirname(__file__), 'payroll.db')
 
+# ============ DATABASE CONNECTION ============
 def get_db():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    return conn
+    """Get database connection (SQLite for local, PostgreSQL for production)"""
+    try:
+        if DB_TYPE == 'postgres':
+            import psycopg2
+            conn = psycopg2.connect(DATABASE_URL)
+        else:
+            import sqlite3
+            conn = sqlite3.connect(DATABASE_PATH)
+            conn.row_factory = sqlite3.Row
+        return conn
+    except Exception as e:
+        print(f"Database connection error: {e}")
+        raise
 
 def init_db():
+    """Initialize database tables"""
     conn = get_db()
     cursor = conn.cursor()
     
-    # Workplaces table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS workplaces (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            base_rate REAL NOT NULL,
-            weekend_multiplier REAL DEFAULT 1.5,
-            public_holiday_multiplier REAL DEFAULT 2.5,
-            overtime_multiplier REAL DEFAULT 1.5,
-            overtime_threshold REAL DEFAULT 8.0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # Shifts table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS shifts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            workplace_id INTEGER NOT NULL,
-            date TEXT NOT NULL,
-            start_time TEXT NOT NULL,
-            end_time TEXT NOT NULL,
-            hours REAL NOT NULL,
-            shift_type TEXT NOT NULL,
-            total_pay REAL NOT NULL,
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (workplace_id) REFERENCES workplaces (id)
-        )
-    ''')
-    
-    # Budget expenses table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS expenses (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            category TEXT NOT NULL,
-            amount REAL NOT NULL,
-            due_date TEXT,
-            is_recurring INTEGER DEFAULT 1,
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # Goals table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS goals (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            target_amount REAL NOT NULL,
-            current_amount REAL DEFAULT 0,
-            deadline TEXT,
-            auto_allocate REAL DEFAULT 0,
-            priority INTEGER DEFAULT 1,
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # Savings table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS savings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            goal_id INTEGER,
-            amount REAL NOT NULL,
-            date TEXT NOT NULL,
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (goal_id) REFERENCES goals (id)
-        )
-    ''')
-    
-    conn.commit()
-    conn.close()
-
-def calculate_shift_pay(workplace, date_str, hours):
-    """Calculate pay based on shift type and hours"""
-    date = datetime.strptime(date_str, '%Y-%m-%d')
-    day_of_week = date.weekday()  # 0=Monday, 6=Sunday
-    
-    base_rate = workplace['base_rate']
-    overtime_threshold = workplace['overtime_threshold']
-    
-    # Determine shift type and multiplier
-    if date_str in PUBLIC_HOLIDAYS:
-        shift_type = 'public_holiday'
-        multiplier = workplace['public_holiday_multiplier']
-    elif day_of_week >= 5:  # Saturday or Sunday
-        shift_type = 'weekend'
-        multiplier = workplace['weekend_multiplier']
-    else:
-        shift_type = 'weekday'
-        multiplier = 1.0
-    
-    # Calculate regular and overtime pay
-    if hours <= overtime_threshold:
-        total_pay = hours * base_rate * multiplier
-    else:
-        regular_hours = overtime_threshold
-        overtime_hours = hours - overtime_threshold
-        regular_pay = regular_hours * base_rate * multiplier
-        overtime_pay = overtime_hours * base_rate * workplace['overtime_multiplier'] * multiplier
-        total_pay = regular_pay + overtime_pay
-        shift_type += '_overtime'
-    
-    return shift_type, round(total_pay, 2)
-
-# WORKPLACES ENDPOINTS
-@app.route('/api/workplaces', methods=['GET', 'POST'])
-def workplaces():
-    conn = get_db()
-    
-    if request.method == 'GET':
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM workplaces ORDER BY name')
-        workplaces = [dict(row) for row in cursor.fetchall()]
-        conn.close()
-        return jsonify(workplaces)
-    
-    elif request.method == 'POST':
-        data = request.json
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO workplaces (name, base_rate, weekend_multiplier, 
-                                   public_holiday_multiplier, overtime_multiplier, overtime_threshold)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (data['name'], data['base_rate'], data.get('weekend_multiplier', 1.5),
-              data.get('public_holiday_multiplier', 2.5), data.get('overtime_multiplier', 1.5),
-              data.get('overtime_threshold', 8.0)))
+    try:
+        if DB_TYPE == 'postgres':
+            # PostgreSQL syntax
+            sql_statements = [
+                '''CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    email VARCHAR(255) UNIQUE NOT NULL,
+                    password_hash VARCHAR(255) NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    role VARCHAR(50) DEFAULT 'employee',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )''',
+                '''CREATE TABLE IF NOT EXISTS workplaces (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    base_rate REAL NOT NULL,
+                    weekend_multiplier REAL DEFAULT 1.5,
+                    public_holiday_multiplier REAL DEFAULT 2.5,
+                    overtime_multiplier REAL DEFAULT 1.5,
+                    overtime_threshold REAL DEFAULT 8.0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+                )''',
+                '''CREATE TABLE IF NOT EXISTS shifts (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    workplace_id INTEGER,
+                    date TEXT NOT NULL,
+                    start_time TEXT NOT NULL,
+                    end_time TEXT NOT NULL,
+                    hours REAL NOT NULL,
+                    shift_type TEXT NOT NULL,
+                    total_pay REAL NOT NULL,
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+                    FOREIGN KEY (workplace_id) REFERENCES workplaces (id)
+                )''',
+                '''CREATE TABLE IF NOT EXISTS expenses (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    category VARCHAR(100) NOT NULL,
+                    amount REAL NOT NULL,
+                    due_date TEXT,
+                    is_recurring BOOLEAN DEFAULT TRUE,
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+                )''',
+                '''CREATE TABLE IF NOT EXISTS goals (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    target_amount REAL NOT NULL,
+                    current_amount REAL DEFAULT 0,
+                    deadline TEXT,
+                    auto_allocate REAL DEFAULT 0,
+                    priority INTEGER DEFAULT 1,
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+                )''',
+                '''CREATE TABLE IF NOT EXISTS savings (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    goal_id INTEGER,
+                    amount REAL NOT NULL,
+                    date TEXT NOT NULL,
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+                    FOREIGN KEY (goal_id) REFERENCES goals (id)
+                )'''
+            ]
+        else:
+            # SQLite syntax
+            sql_statements = [
+                '''CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    role TEXT DEFAULT 'employee',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )''',
+                '''CREATE TABLE IF NOT EXISTS workplaces (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    base_rate REAL NOT NULL,
+                    weekend_multiplier REAL DEFAULT 1.5,
+                    public_holiday_multiplier REAL DEFAULT 2.5,
+                    overtime_multiplier REAL DEFAULT 1.5,
+                    overtime_threshold REAL DEFAULT 8.0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+                )''',
+                '''CREATE TABLE IF NOT EXISTS shifts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    workplace_id INTEGER,
+                    date TEXT NOT NULL,
+                    start_time TEXT NOT NULL,
+                    end_time TEXT NOT NULL,
+                    hours REAL NOT NULL,
+                    shift_type TEXT NOT NULL,
+                    total_pay REAL NOT NULL,
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+                    FOREIGN KEY (workplace_id) REFERENCES workplaces (id)
+                )''',
+                '''CREATE TABLE IF NOT EXISTS expenses (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    category TEXT NOT NULL,
+                    amount REAL NOT NULL,
+                    due_date TEXT,
+                    is_recurring BOOLEAN DEFAULT 1,
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+                )''',
+                '''CREATE TABLE IF NOT EXISTS goals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    target_amount REAL NOT NULL,
+                    current_amount REAL DEFAULT 0,
+                    deadline TEXT,
+                    auto_allocate REAL DEFAULT 0,
+                    priority INTEGER DEFAULT 1,
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+                )''',
+                '''CREATE TABLE IF NOT EXISTS savings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    goal_id INTEGER,
+                    amount REAL NOT NULL,
+                    date TEXT NOT NULL,
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+                    FOREIGN KEY (goal_id) REFERENCES goals (id)
+                )'''
+            ]
+        
+        for sql in sql_statements:
+            cursor.execute(sql)
+        
         conn.commit()
-        workplace_id = cursor.lastrowid
+        print("✓ Database tables initialized successfully")
+    except Exception as e:
+        print(f"Error initializing database: {e}")
+        conn.rollback()
+    finally:
+        cursor.close()
         conn.close()
-        return jsonify({'id': workplace_id, 'message': 'Workplace created'}), 201
 
-@app.route('/api/workplaces/<int:workplace_id>', methods=['GET', 'PUT', 'DELETE'])
-def workplace_detail(workplace_id):
+# ============ QUERY HELPER ============
+class SmartCursor:
+    """Wrapper that converts ? to ? for SQLite automatically"""
+    def __init__(self, cursor, db_type):
+        self.cursor = cursor
+        self.db_type = db_type
+    
+    def execute(self, sql, params=()):
+        if self.db_type == 'sqlite':
+            sql = sql.replace('?', '?')
+        return self.cursor.execute(sql, params)
+    
+    def fetchone(self):
+        return self.cursor.fetchone()
+    
+    def fetchall(self):
+        return self.cursor.fetchall()
+    
+    def close(self):
+        return self.cursor.close()
+
+def execute_query(sql, params=()):
+    """Execute query with automatic parameter conversion"""
+    conn = get_db()
+    cursor = SmartCursor(conn.cursor(), DB_TYPE)
+    try:
+        cursor.execute(sql, params)
+        return cursor, conn
+    except Exception as e:
+        conn.close()
+        raise e
+def hash_password(password):
+    """Hash password using bcrypt"""
+    if not isinstance(password, bytes):
+        password = password.encode('utf-8')
+    return bcrypt.hashpw(password, bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(password, hashed):
+    """Verify password against hash"""
+    if not isinstance(password, bytes):
+        password = password.encode('utf-8')
+    if not isinstance(hashed, bytes):
+        hashed = hashed.encode('utf-8')
+    return bcrypt.checkpw(password, hashed)
+
+def create_jwt_token(user_id, email, role):
+    """Create JWT token"""
+    payload = {
+        'user_id': user_id,
+        'email': email,
+        'role': role,
+        'exp': datetime.utcnow() + timedelta(seconds=JWT_EXPIRATION)
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm='HS256')
+
+def verify_jwt_token(token):
+    """Verify JWT token and return payload"""
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+        return payload
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+
+def token_required(f):
+    """Decorator to require valid JWT token"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        
+        if 'Authorization' in request.headers:
+            auth_header = request.headers['Authorization']
+            try:
+                token = auth_header.split(" ")[1]
+            except IndexError:
+                return jsonify({'error': 'Invalid token format'}), 401
+        
+        if not token:
+            return jsonify({'error': 'Token is missing'}), 401
+        
+        payload = verify_jwt_token(token)
+        if not payload:
+            return jsonify({'error': 'Invalid or expired token'}), 401
+        
+        request.user_id = payload['user_id']
+        request.user_email = payload['email']
+        request.user_role = payload['role']
+        
+        return f(*args, **kwargs)
+    
+    return decorated
+
+# ============ VALIDATION HELPERS ============
+def validate_email(email):
+    """Validate email format"""
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email) is not None
+
+def validate_password(password):
+    """Validate password strength"""
+    if len(password) < 6:
+        return False, "Password must be at least 6 characters"
+    return True, None
+
+def validate_shift_data(data):
+    """Validate shift input data"""
+    errors = []
+    
+    if 'date' not in data or not data['date']:
+        errors.append("Date is required")
+    
+    if 'hours' not in data:
+        errors.append("Hours is required")
+    elif not isinstance(data['hours'], (int, float)):
+        errors.append("Hours must be a number")
+    elif data['hours'] <= 0 or data['hours'] > 24:
+        errors.append("Hours must be between 0 and 24")
+    
+    if 'total_pay' not in data:
+        errors.append("Total pay is required")
+    elif not isinstance(data['total_pay'], (int, float)):
+        errors.append("Total pay must be a number")
+    elif data['total_pay'] < 0:
+        errors.append("Total pay cannot be negative")
+    
+    return errors
+
+def validate_expense_data(data):
+    """Validate expense input data"""
+    errors = []
+    
+    if 'category' not in data or not data['category']:
+        errors.append("Category is required")
+    
+    if 'amount' not in data:
+        errors.append("Amount is required")
+    elif not isinstance(data['amount'], (int, float)):
+        errors.append("Amount must be a number")
+    elif data['amount'] <= 0:
+        errors.append("Amount must be greater than 0")
+    
+    return errors
+
+def validate_goal_data(data):
+    """Validate goal input data"""
+    errors = []
+    
+    if 'name' not in data or not data['name']:
+        errors.append("Goal name is required")
+    
+    if 'target_amount' not in data:
+        errors.append("Target amount is required")
+    elif not isinstance(data['target_amount'], (int, float)):
+        errors.append("Target amount must be a number")
+    elif data['target_amount'] <= 0:
+        errors.append("Target amount must be greater than 0")
+    
+    return errors
+
+# ============ AUTHENTICATION ENDPOINTS ============
+@app.route('/api/auth/register', methods=['POST'])
+def register():
+    """Register new user"""
+    data = request.get_json()
+    
+    # Validation
+    if not data.get('email') or not validate_email(data['email']):
+        return jsonify({'error': 'Invalid email format'}), 400
+    
+    if not data.get('password'):
+        return jsonify({'error': 'Password is required'}), 400
+    
+    valid, msg = validate_password(data['password'])
+    if not valid:
+        return jsonify({'error': msg}), 400
+    
+    if not data.get('name'):
+        return jsonify({'error': 'Name is required'}), 400
+    
     conn = get_db()
     cursor = conn.cursor()
     
-    if request.method == 'GET':
-        cursor.execute('SELECT * FROM workplaces WHERE id = ?', (workplace_id,))
-        workplace = cursor.fetchone()
-        conn.close()
-        if workplace:
-            return jsonify(dict(workplace))
-        return jsonify({'error': 'Workplace not found'}), 404
-    
-    elif request.method == 'PUT':
-        data = request.json
-        cursor.execute('''
-            UPDATE workplaces 
-            SET name=?, base_rate=?, weekend_multiplier=?, 
-                public_holiday_multiplier=?, overtime_multiplier=?, overtime_threshold=?
-            WHERE id=?
-        ''', (data['name'], data['base_rate'], data.get('weekend_multiplier', 1.5),
-              data.get('public_holiday_multiplier', 2.5), data.get('overtime_multiplier', 1.5),
-              data.get('overtime_threshold', 8.0), workplace_id))
+    try:
+        # Check if user exists - convert ? to ? for SQLite
+        sql = 'SELECT id FROM users WHERE email = ?'.replace('?', '?')
+        cursor.execute(sql, (data['email'],))
+        if cursor.fetchone():
+            return jsonify({'error': 'Email already registered'}), 400
+        
+        # Create user
+        hashed_password = hash_password(data['password'])
+        sql = 'INSERT INTO users (email, password_hash, name, role) VALUES (?, ?, ?, ?)'.replace('?', '?')
+        cursor.execute(sql, (data['email'], hashed_password, data['name'], 'employee'))
+        
+        # Get user ID
+        if DB_TYPE == 'postgres':
+            cursor.execute('SELECT lastval()')
+            user_id = cursor.fetchone()[0]
+        else:
+            user_id = cursor.lastrowid
+        
         conn.commit()
-        conn.close()
-        return jsonify({'message': 'Workplace updated'})
+        
+        # Create token
+        token = create_jwt_token(user_id, data['email'], 'employee')
+        
+        return jsonify({
+            'success': True,
+            'token': token,
+            'user': {'id': user_id, 'email': data['email'], 'name': data['name']}
+        }), 201
     
-    elif request.method == 'DELETE':
-        cursor.execute('DELETE FROM workplaces WHERE id = ?', (workplace_id,))
-        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
         conn.close()
-        return jsonify({'message': 'Workplace deleted'})
 
-# SHIFTS ENDPOINTS
-@app.route('/api/shifts', methods=['GET', 'POST'])
-def shifts():
-    conn = get_db()
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    """Login user"""
+    data = request.get_json()
     
-    if request.method == 'GET':
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT s.*, w.name as workplace_name 
-            FROM shifts s
-            JOIN workplaces w ON s.workplace_id = w.id
-            ORDER BY s.date DESC, s.start_time DESC
-        ''')
-        shifts = [dict(row) for row in cursor.fetchall()]
-        conn.close()
-        return jsonify(shifts)
+    if not data.get('email') or not data.get('password'):
+        return jsonify({'error': 'Email and password required'}), 400
     
-    elif request.method == 'POST':
-        data = request.json
-        cursor = conn.cursor()
-        
-        # Get workplace details
-        cursor.execute('SELECT * FROM workplaces WHERE id = ?', (data['workplace_id'],))
-        workplace = dict(cursor.fetchone())
-        
-        # Calculate hours and pay
-        start = datetime.strptime(data['start_time'], '%H:%M')
-        end = datetime.strptime(data['end_time'], '%H:%M')
-        hours = (end - start).seconds / 3600
-        
-        shift_type, total_pay = calculate_shift_pay(workplace, data['date'], hours)
-        
-        cursor.execute('''
-            INSERT INTO shifts (workplace_id, date, start_time, end_time, 
-                               hours, shift_type, total_pay, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (data['workplace_id'], data['date'], data['start_time'], 
-              data['end_time'], hours, shift_type, total_pay, data.get('notes', '')))
-        
-        conn.commit()
-        shift_id = cursor.lastrowid
-        conn.close()
-        return jsonify({'id': shift_id, 'total_pay': total_pay, 'shift_type': shift_type}), 201
-
-@app.route('/api/shifts/<int:shift_id>', methods=['GET', 'PUT', 'DELETE'])
-def shift_detail(shift_id):
     conn = get_db()
     cursor = conn.cursor()
     
-    if request.method == 'GET':
-        cursor.execute('''
-            SELECT s.*, w.name as workplace_name 
-            FROM shifts s
-            JOIN workplaces w ON s.workplace_id = w.id
-            WHERE s.id = ?
-        ''', (shift_id,))
-        shift = cursor.fetchone()
-        conn.close()
-        if shift:
-            return jsonify(dict(shift))
-        return jsonify({'error': 'Shift not found'}), 404
+    try:
+        cursor.execute('SELECT id, email, name, password_hash, role FROM users WHERE email = ?', (data['email'],))
+        user = cursor.fetchone()
+        
+        if not user:
+            return jsonify({'error': 'Invalid email or password'}), 401
+        
+        user_id, email, name, password_hash, role = user
+        
+        if not verify_password(data['password'], password_hash):
+            return jsonify({'error': 'Invalid email or password'}), 401
+        
+        token = create_jwt_token(user_id, email, role)
+        
+        return jsonify({
+            'success': True,
+            'token': token,
+            'user': {'id': user_id, 'email': email, 'name': name, 'role': role}
+        }), 200
     
-    elif request.method == 'PUT':
-        data = request.json
-        cursor.execute('SELECT * FROM workplaces WHERE id = ?', (data['workplace_id'],))
-        workplace = dict(cursor.fetchone())
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/auth/profile', methods=['GET'])
+@token_required
+def get_profile():
+    """Get current user profile"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('SELECT id, email, name, role FROM users WHERE id = ?', (request.user_id,))
+        user = cursor.fetchone()
         
-        start = datetime.strptime(data['start_time'], '%H:%M')
-        end = datetime.strptime(data['end_time'], '%H:%M')
-        hours = (end - start).seconds / 3600
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
         
-        shift_type, total_pay = calculate_shift_pay(workplace, data['date'], hours)
+        user_id, email, name, role = user
+        return jsonify({
+            'id': user_id,
+            'email': email,
+            'name': name,
+            'role': role
+        }), 200
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# ============ SHIFT ENDPOINTS ============
+@app.route('/api/shifts', methods=['GET'])
+@token_required
+def get_shifts():
+    """Get all shifts for current user"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            SELECT id, workplace_id, date, start_time, end_time, hours, shift_type, total_pay, notes
+            FROM shifts WHERE user_id = ? ORDER BY date DESC
+        ''', (request.user_id,))
+        
+        shifts = []
+        for row in cursor.fetchall():
+            shifts.append({
+                'id': row[0],
+                'workplace_id': row[1],
+                'date': row[2],
+                'start_time': row[3],
+                'end_time': row[4],
+                'hours': row[5],
+                'shift_type': row[6],
+                'total_pay': row[7],
+                'notes': row[8]
+            })
+        
+        return jsonify(shifts), 200
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/shifts', methods=['POST'])
+@token_required
+def create_shift():
+    """Create new shift"""
+    data = request.get_json()
+    
+    # Validation
+    errors = validate_shift_data(data)
+    if errors:
+        return jsonify({'errors': errors}), 400
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            INSERT INTO shifts (user_id, workplace_id, date, start_time, end_time, hours, shift_type, total_pay, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           
+        ''', (
+            request.user_id,
+            data.get('workplace_id'),
+            data['date'],
+            data.get('start_time', ''),
+            data.get('end_time', ''),
+            data['hours'],
+            data.get('shift_type', 'regular'),
+            data['total_pay'],
+            data.get('notes', '')
+        ))
+        
+        shift_id = cursor.fetchone()[0]
+        conn.commit()
+        
+        return jsonify({'id': shift_id, 'success': True}), 201
+    
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/shifts/<int:shift_id>', methods=['PUT'])
+@token_required
+def update_shift(shift_id):
+    """Update shift"""
+    data = request.get_json()
+    
+    # Validation
+    errors = validate_shift_data(data)
+    if errors:
+        return jsonify({'errors': errors}), 400
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Check ownership
+        cursor.execute('SELECT user_id FROM shifts WHERE id = ?', (shift_id,))
+        result = cursor.fetchone()
+        if not result or result[0] != request.user_id:
+            return jsonify({'error': 'Unauthorized'}), 403
         
         cursor.execute('''
-            UPDATE shifts 
-            SET workplace_id=?, date=?, start_time=?, end_time=?, 
-                hours=?, shift_type=?, total_pay=?, notes=?
-            WHERE id=?
-        ''', (data['workplace_id'], data['date'], data['start_time'], 
-              data['end_time'], hours, shift_type, total_pay, 
-              data.get('notes', ''), shift_id))
+            UPDATE shifts SET date = ?, hours = ?, total_pay = ?, notes = ?
+            WHERE id = ? AND user_id = ?
+        ''', (data['date'], data['hours'], data['total_pay'], data.get('notes', ''), shift_id, request.user_id))
         
         conn.commit()
-        conn.close()
-        return jsonify({'message': 'Shift updated', 'total_pay': total_pay})
+        return jsonify({'success': True}), 200
     
-    elif request.method == 'DELETE':
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/shifts/<int:shift_id>', methods=['DELETE'])
+@token_required
+def delete_shift(shift_id):
+    """Delete shift"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Check ownership
+        cursor.execute('SELECT user_id FROM shifts WHERE id = ?', (shift_id,))
+        result = cursor.fetchone()
+        if not result or result[0] != request.user_id:
+            return jsonify({'error': 'Unauthorized'}), 403
+        
         cursor.execute('DELETE FROM shifts WHERE id = ?', (shift_id,))
         conn.commit()
+        
+        return jsonify({'success': True}), 200
+    
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
         conn.close()
-        return jsonify({'message': 'Shift deleted'})
 
-# BUDGET ENDPOINTS
-@app.route('/api/expenses', methods=['GET', 'POST'])
-def expenses():
+# ============ EXPENSE ENDPOINTS ============
+@app.route('/api/expenses', methods=['GET'])
+@token_required
+def get_expenses():
+    """Get all expenses for current user"""
     conn = get_db()
     cursor = conn.cursor()
     
-    if request.method == 'GET':
-        cursor.execute('SELECT * FROM expenses ORDER BY category')
-        expenses = [dict(row) for row in cursor.fetchall()]
-        conn.close()
-        return jsonify(expenses)
-    
-    elif request.method == 'POST':
-        data = request.json
+    try:
         cursor.execute('''
-            INSERT INTO expenses (category, amount, due_date, is_recurring, notes)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (data['category'], data['amount'], data.get('due_date'), 
-              data.get('is_recurring', 1), data.get('notes', '')))
-        conn.commit()
-        expense_id = cursor.lastrowid
+            SELECT id, category, amount, due_date, is_recurring, notes
+            FROM expenses WHERE user_id = ? ORDER BY created_at DESC
+        ''', (request.user_id,))
+        
+        expenses = []
+        for row in cursor.fetchall():
+            expenses.append({
+                'id': row[0],
+                'category': row[1],
+                'amount': row[2],
+                'due_date': row[3],
+                'is_recurring': row[4],
+                'notes': row[5]
+            })
+        
+        return jsonify(expenses), 200
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
         conn.close()
-        return jsonify({'id': expense_id, 'message': 'Expense created'}), 201
 
-@app.route('/api/expenses/<int:expense_id>', methods=['GET', 'PUT', 'DELETE'])
-def expense_detail(expense_id):
+@app.route('/api/expenses', methods=['POST'])
+@token_required
+def create_expense():
+    """Create new expense"""
+    data = request.get_json()
+    
+    # Validation
+    errors = validate_expense_data(data)
+    if errors:
+        return jsonify({'errors': errors}), 400
+    
     conn = get_db()
     cursor = conn.cursor()
     
-    if request.method == 'GET':
-        cursor.execute('SELECT * FROM expenses WHERE id = ?', (expense_id,))
-        expense = cursor.fetchone()
-        conn.close()
-        if expense:
-            return jsonify(dict(expense))
-        return jsonify({'error': 'Expense not found'}), 404
-    
-    elif request.method == 'PUT':
-        data = request.json
+    try:
         cursor.execute('''
-            UPDATE expenses 
-            SET category=?, amount=?, due_date=?, is_recurring=?, notes=?
-            WHERE id=?
-        ''', (data['category'], data['amount'], data.get('due_date'),
-              data.get('is_recurring', 1), data.get('notes', ''), expense_id))
+            INSERT INTO expenses (user_id, category, amount, due_date, is_recurring, notes)
+            VALUES (?, ?, ?, ?, ?, ?)
+           
+        ''', (
+            request.user_id,
+            data['category'],
+            data['amount'],
+            data.get('due_date'),
+            data.get('is_recurring', True),
+            data.get('notes', '')
+        ))
+        
+        expense_id = cursor.fetchone()[0]
         conn.commit()
-        conn.close()
-        return jsonify({'message': 'Expense updated'})
+        
+        return jsonify({'id': expense_id, 'success': True}), 201
     
-    elif request.method == 'DELETE':
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/expenses/<int:expense_id>', methods=['DELETE'])
+@token_required
+def delete_expense(expense_id):
+    """Delete expense"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('SELECT user_id FROM expenses WHERE id = ?', (expense_id,))
+        result = cursor.fetchone()
+        if not result or result[0] != request.user_id:
+            return jsonify({'error': 'Unauthorized'}), 403
+        
         cursor.execute('DELETE FROM expenses WHERE id = ?', (expense_id,))
         conn.commit()
-        conn.close()
-        return jsonify({'message': 'Expense deleted'})
-
-# ANALYTICS ENDPOINTS
-@app.route('/api/summary/fortnight', methods=['GET'])
-def fortnight_summary():
-    """Get financial summary with all-time totals (updates immediately)"""
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    # Get ALL shifts (not just fortnight - so it updates immediately!)
-    cursor.execute('''
-        SELECT SUM(total_pay) as total_earned, SUM(hours) as total_hours, COUNT(*) as shift_count
-        FROM shifts
-    ''')
-    
-    shift_data = dict(cursor.fetchone())
-    
-    # Get total ALL expenses (not just recurring)
-    cursor.execute('SELECT SUM(amount) as total_expenses FROM expenses')
-    expenses_data = dict(cursor.fetchone())
-    
-    # Get total contributed to goals (actual saved money)
-    cursor.execute('SELECT SUM(current_amount) as goal_saved FROM goals')
-    goals_data = dict(cursor.fetchone())
-    
-    total_earned = shift_data['total_earned'] or 0
-    total_expenses = expenses_data['total_expenses'] or 0
-    goal_saved = goals_data['goal_saved'] or 0
-    
-    # Financial breakdown: Earned - Expenses - Goals = Available
-    available_money = total_earned - total_expenses - goal_saved
-    
-    conn.close()
-    
-    return jsonify({
-        'total_earned': total_earned,
-        'total_hours': shift_data['total_hours'] or 0,
-        'shift_count': shift_data['shift_count'] or 0,
-        'total_expenses': total_expenses,
-        'goal_allocations': goal_saved,  # Keep same key name for frontend compatibility
-        'net_after_goals': available_money
-    })
-
-@app.route('/api/summary/monthly', methods=['GET'])
-def monthly_summary():
-    """Get monthly breakdown"""
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT 
-            strftime('%Y-%m', date) as month,
-            SUM(total_pay) as total_earned,
-            SUM(hours) as total_hours,
-            COUNT(*) as shift_count
-        FROM shifts
-        GROUP BY strftime('%Y-%m', date)
-        ORDER BY month DESC
-        LIMIT 12
-    ''')
-    
-    monthly_data = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    
-    return jsonify(monthly_data)
-
-# GOALS ENDPOINTS
-@app.route('/api/goals', methods=['GET', 'POST'])
-def goals():
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    if request.method == 'GET':
-        cursor.execute('''
-            SELECT g.*, 
-                   COALESCE(SUM(s.amount), 0) as saved_amount,
-                   g.target_amount - COALESCE(SUM(s.amount), 0) as remaining
-            FROM goals g
-            LEFT JOIN savings s ON g.id = s.goal_id
-            GROUP BY g.id
-            ORDER BY g.priority DESC, g.deadline ASC
-        ''')
-        goals = [dict(row) for row in cursor.fetchall()]
         
-        # Calculate progress percentage
-        for goal in goals:
-            goal['progress'] = (goal['saved_amount'] / goal['target_amount'] * 100) if goal['target_amount'] > 0 else 0
-            goal['remaining'] = goal['target_amount'] - goal['saved_amount']
-            
-        conn.close()
-        return jsonify(goals)
+        return jsonify({'success': True}), 200
     
-    elif request.method == 'POST':
-        data = request.json
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# ============ GOALS ENDPOINTS ============
+@app.route('/api/goals', methods=['GET'])
+@token_required
+def get_goals():
+    """Get all goals for current user"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
         cursor.execute('''
-            INSERT INTO goals (name, target_amount, deadline, auto_allocate, priority, notes)
+            SELECT id, name, target_amount, current_amount, deadline, priority, notes
+            FROM goals WHERE user_id = ? ORDER BY priority, deadline
+        ''', (request.user_id,))
+        
+        goals = []
+        for row in cursor.fetchall():
+            goals.append({
+                'id': row[0],
+                'name': row[1],
+                'target_amount': row[2],
+                'current_amount': row[3],
+                'deadline': row[4],
+                'priority': row[5],
+                'notes': row[6]
+            })
+        
+        return jsonify(goals), 200
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/goals', methods=['POST'])
+@token_required
+def create_goal():
+    """Create new goal"""
+    data = request.get_json()
+    
+    # Validation
+    errors = validate_goal_data(data)
+    if errors:
+        return jsonify({'errors': errors}), 400
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            INSERT INTO goals (user_id, name, target_amount, deadline, priority, notes)
             VALUES (?, ?, ?, ?, ?, ?)
-        ''', (data['name'], data['target_amount'], data.get('deadline'),
-              data.get('auto_allocate', 0), data.get('priority', 1), data.get('notes', '')))
+           
+        ''', (
+            request.user_id,
+            data['name'],
+            data['target_amount'],
+            data.get('deadline'),
+            data.get('priority', 1),
+            data.get('notes', '')
+        ))
+        
+        goal_id = cursor.fetchone()[0]
         conn.commit()
-        goal_id = cursor.lastrowid
+        
+        return jsonify({'id': goal_id, 'success': True}), 201
+    
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
         conn.close()
-        return jsonify({'id': goal_id, 'message': 'Goal created'}), 201
 
-@app.route('/api/goals/<int:goal_id>', methods=['GET', 'PUT', 'DELETE'])
-def goal_detail(goal_id):
+@app.route('/api/goals/<int:goal_id>', methods=['DELETE'])
+@token_required
+def delete_goal(goal_id):
+    """Delete goal"""
     conn = get_db()
     cursor = conn.cursor()
     
-    if request.method == 'GET':
-        cursor.execute('''
-            SELECT g.*, 
-                   COALESCE(SUM(s.amount), 0) as saved_amount
-            FROM goals g
-            LEFT JOIN savings s ON g.id = s.goal_id
-            WHERE g.id = ?
-            GROUP BY g.id
-        ''', (goal_id,))
-        goal = cursor.fetchone()
-        conn.close()
-        if goal:
-            goal_dict = dict(goal)
-            goal_dict['progress'] = (goal_dict['saved_amount'] / goal_dict['target_amount'] * 100) if goal_dict['target_amount'] > 0 else 0
-            goal_dict['remaining'] = goal_dict['target_amount'] - goal_dict['saved_amount']
-            return jsonify(goal_dict)
-        return jsonify({'error': 'Goal not found'}), 404
-    
-    elif request.method == 'PUT':
-        data = request.json
-        cursor.execute('''
-            UPDATE goals 
-            SET name=?, target_amount=?, deadline=?, auto_allocate=?, priority=?, notes=?
-            WHERE id=?
-        ''', (data['name'], data['target_amount'], data.get('deadline'),
-              data.get('auto_allocate', 0), data.get('priority', 1), 
-              data.get('notes', ''), goal_id))
-        conn.commit()
-        conn.close()
-        return jsonify({'message': 'Goal updated'})
-    
-    elif request.method == 'DELETE':
+    try:
+        cursor.execute('SELECT user_id FROM goals WHERE id = ?', (goal_id,))
+        result = cursor.fetchone()
+        if not result or result[0] != request.user_id:
+            return jsonify({'error': 'Unauthorized'}), 403
+        
         cursor.execute('DELETE FROM goals WHERE id = ?', (goal_id,))
-        cursor.execute('DELETE FROM savings WHERE goal_id = ?', (goal_id,))
         conn.commit()
+        
+        return jsonify({'success': True}), 200
+    
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
         conn.close()
-        return jsonify({'message': 'Goal deleted'})
 
-@app.route('/api/goals/<int:goal_id>/contribute', methods=['POST'])
-def contribute_to_goal(goal_id):
-    """Add money to a goal"""
-    conn = get_db()
-    cursor = conn.cursor()
-    data = request.json
-    
-    cursor.execute('''
-        INSERT INTO savings (goal_id, amount, date, notes)
-        VALUES (?, ?, ?, ?)
-    ''', (goal_id, data['amount'], data.get('date', datetime.now().strftime('%Y-%m-%d')),
-          data.get('notes', '')))
-    
-    conn.commit()
-    conn.close()
-    return jsonify({'message': 'Contribution added'}), 201
-
-@app.route('/api/expenses/summary', methods=['GET'])
-def expense_summary():
-    """Get expense breakdown by category"""
+# ============ SUMMARY & STATS ENDPOINTS ============
+@app.route('/api/summary/fortnight', methods=['GET'])
+@token_required
+def get_fortnight_summary():
+    """Get 2-week summary"""
     conn = get_db()
     cursor = conn.cursor()
     
-    cursor.execute('''
-        SELECT category, 
-               SUM(amount) as total,
-               COUNT(*) as count
-        FROM expenses
-        GROUP BY category
-        ORDER BY total DESC
-    ''')
+    try:
+        # Get shifts from last 14 days
+        cursor.execute('''
+            SELECT SUM(hours), SUM(total_pay), COUNT(*)
+            FROM shifts
+            WHERE user_id = ? AND date >= (CURRENT_DATE - INTERVAL '14 days')
+        ''', (request.user_id,))
+        
+        result = cursor.fetchone()
+        total_hours = result[0] or 0
+        total_earned = result[1] or 0
+        shift_count = result[2] or 0
+        
+        # Get expenses
+        cursor.execute('SELECT SUM(amount) FROM expenses WHERE user_id = ?', (request.user_id,))
+        total_expenses = cursor.fetchone()[0] or 0
+        
+        return jsonify({
+            'total_hours': total_hours,
+            'total_earned': total_earned,
+            'total_expenses': total_expenses,
+            'shift_count': shift_count,
+            'net_income': total_earned - total_expenses
+        }), 200
     
-    summary = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return jsonify(summary)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
 
 @app.route('/api/stats', methods=['GET'])
+@token_required
 def get_stats():
     """Get overall statistics"""
     conn = get_db()
     cursor = conn.cursor()
     
-    # Total earnings all time
-    cursor.execute('SELECT SUM(total_pay) as total, SUM(hours) as hours FROM shifts')
-    earnings = dict(cursor.fetchone())
+    try:
+        # Total earned
+        cursor.execute('SELECT COALESCE(SUM(total_pay), 0) FROM shifts WHERE user_id = ?', (request.user_id,))
+        total_earned = cursor.fetchone()[0]
+        
+        # Total hours
+        cursor.execute('SELECT COALESCE(SUM(hours), 0) FROM shifts WHERE user_id = ?', (request.user_id,))
+        total_hours = cursor.fetchone()[0]
+        
+        # Active goals
+        cursor.execute('SELECT COUNT(*) FROM goals WHERE user_id = ? AND current_amount < target_amount', (request.user_id,))
+        active_goals = cursor.fetchone()[0]
+        
+        # Goals saved
+        cursor.execute('SELECT COALESCE(SUM(current_amount), 0) FROM goals WHERE user_id = ?', (request.user_id,))
+        goals_saved = cursor.fetchone()[0]
+        
+        # Expense info
+        cursor.execute('SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE user_id = ?', (request.user_id,))
+        fortnight_expenses = cursor.fetchone()[0]
+        
+        return jsonify({
+            'total_earned': total_earned,
+            'total_hours': total_hours,
+            'active_goals': active_goals,
+            'goals_saved': goals_saved,
+            'fortnight_expenses': fortnight_expenses,
+            'this_week': {'earned': 0, 'hours': 0, 'shifts': 0},
+            'average_rate': total_earned / max(total_hours, 1) if total_hours > 0 else 0
+        }), 200
     
-    # Average hourly rate
-    avg_rate = (earnings['total'] / earnings['hours']) if earnings['hours'] and earnings['hours'] > 0 else 0
-    
-    # Total saved towards goals
-    cursor.execute('SELECT SUM(amount) as saved FROM savings')
-    goals_saved = dict(cursor.fetchone())['saved'] or 0
-    
-    # Total expenses
-    cursor.execute('SELECT SUM(amount) as total FROM expenses WHERE is_recurring = 1')
-    monthly_expenses = dict(cursor.fetchone())['total'] or 0
-    
-    # Number of active goals
-    cursor.execute('SELECT COUNT(*) as count FROM goals')
-    goal_count = dict(cursor.fetchone())['count']
-    
-    # This week's shifts
-    cursor.execute('''
-        SELECT COUNT(*) as count, SUM(hours) as hours, SUM(total_pay) as earned
-        FROM shifts
-        WHERE date >= date('now', '-7 days')
-    ''')
-    week_data = dict(cursor.fetchone())
-    
-    conn.close()
-    
-    return jsonify({
-        'total_earned': earnings['total'] or 0,
-        'total_hours': earnings['hours'] or 0,
-        'average_rate': avg_rate,
-        'goals_saved': goals_saved,
-        'fortnight_expenses': monthly_expenses,
-        'active_goals': goal_count,
-        'this_week': {
-            'shifts': week_data['count'] or 0,
-            'hours': week_data['hours'] or 0,
-            'earned': week_data['earned'] or 0
-        }
-    })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
 
-@app.route('/api/export/shifts', methods=['GET'])
-def export_shifts():
-    """Export shifts as CSV"""
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT s.date, w.name as workplace, s.start_time, s.end_time,
-               s.hours, s.shift_type, s.total_pay, s.notes
-        FROM shifts s
-        JOIN workplaces w ON s.workplace_id = w.id
-        ORDER BY s.date DESC
-    ''')
-    
-    shifts = cursor.fetchall()
-    conn.close()
-    
-    # Create CSV
-    import io
-    output = io.StringIO()
-    output.write('Date,Workplace,Start Time,End Time,Hours,Type,Pay,Notes\n')
-    
-    for shift in shifts:
-        output.write(f'{shift[0]},{shift[1]},{shift[2]},{shift[3]},{shift[4]},{shift[5]},{shift[6]},"{shift[7] or ""}"\n')
-    
-    return output.getvalue(), 200, {'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename=shifts.csv'}
+# ============ ERROR HANDLERS ============
+@app.route('/api/health', methods=['GET'])
+def health():
+    """Health check endpoint"""
+    return jsonify({'status': 'ok'}), 200
 
-@app.route('/api/search/shifts', methods=['GET'])
-def search_shifts():
-    """Search shifts by date range or workplace"""
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
-    workplace_id = request.args.get('workplace_id')
-    
-    query = '''
-        SELECT s.*, w.name as workplace_name
-        FROM shifts s
-        JOIN workplaces w ON s.workplace_id = w.id
-        WHERE 1=1
-    '''
-    params = []
-    
-    if start_date:
-        query += ' AND s.date >= ?'
-        params.append(start_date)
-    
-    if end_date:
-        query += ' AND s.date <= ?'
-        params.append(end_date)
-    
-    if workplace_id:
-        query += ' AND s.workplace_id = ?'
-        params.append(workplace_id)
-    
-    query += ' ORDER BY s.date DESC, s.start_time DESC'
-    
-    cursor.execute(query, params)
-    shifts = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    
-    return jsonify(shifts)
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({'error': 'Endpoint not found'}), 404
 
-# TAX CALCULATOR
+@app.errorhandler(500)
+def internal_error(e):
+    return jsonify({'error': 'Internal server error'}), 500
 
+# ============ APP INITIALIZATION ============
 if __name__ == '__main__':
     init_db()
     port = int(os.environ.get('PORT', 5001))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port, debug=False)
