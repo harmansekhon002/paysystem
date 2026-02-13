@@ -923,8 +923,6 @@ function renderExpensesList() {
     document.getElementById('expensesList').innerHTML = expensesHtml;
     updateBulkActionUI('expenses');
 }
-    document.getElementById('expensesList').innerHTML = expensesHtml;
-}
 
 function renderGoalsList() {
     const goalsHtml = goals.length > 0 ? goals.map(goal => {

@@ -3,7 +3,7 @@ import jwt
 import bcrypt
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 import re
 
@@ -12,7 +12,7 @@ CORS(app)
 
 # Configuration - Support both SQLite (local) and PostgreSQL (production)
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
-JWT_SECRET = os.environ.get('JWT_SECRET', 'payroll-system-secret-key')
+JWT_SECRET = os.environ.get('JWT_SECRET', 'payroll-system-secret-key-with-sufficient-length-32-bytes')
 JWT_EXPIRATION = 86400 * 7  # 7 days
 
 # Determine database type
@@ -312,7 +312,7 @@ def create_jwt_token(user_id, email, role):
         'user_id': user_id,
         'email': email,
         'role': role,
-        'exp': datetime.utcnow() + timedelta(seconds=JWT_EXPIRATION)
+        'exp': datetime.now(timezone.utc) + timedelta(seconds=JWT_EXPIRATION)
     }
     return jwt.encode(payload, JWT_SECRET, algorithm='HS256')
 
