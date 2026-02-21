@@ -1274,11 +1274,21 @@ function setupEventListeners() {
     }
 }
 
-// Tab management
+// Tab management - wrapper for onclick handlers
+function switchTab(tabName) {
+    const btn = document.querySelector(`[data-tab="${tabName}"]`);
+    showTab(tabName, { currentTarget: btn });
+}
+
 function showTab(tabName, event) {
     // Hide all tabs
     document.querySelectorAll('.tab-content').forEach(tab => {
         tab.classList.remove('active');
+    });
+    
+    // Remove active from all nav buttons
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('active');
     });
     document.querySelectorAll('.tab').forEach(tab => {
         tab.classList.remove('active');
@@ -1288,7 +1298,8 @@ function showTab(tabName, event) {
     document.getElementById(tabName).classList.add('active');
     let trigger = (event && event.currentTarget) ? event.currentTarget : null;
     if (!trigger) {
-        trigger = document.querySelector(`.tab[data-tab="${tabName}"]`);
+        trigger = document.querySelector(`.nav-btn[data-tab="${tabName}"]`) || 
+                  document.querySelector(`.tab[data-tab="${tabName}"]`);
     }
     if (trigger) {
         trigger.classList.add('active');
