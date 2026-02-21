@@ -357,14 +357,19 @@
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="shiftStart">Start Time *</label>
-                        <input type="time" id="shiftStart" required>
+                        <label for="shiftStart">Start Time</label>
+                        <input type="time" id="shiftStart">
                     </div>
                     
                     <div class="form-group">
-                        <label for="shiftEnd">End Time *</label>
-                        <input type="time" id="shiftEnd" required>
+                        <label for="shiftEnd">End Time</label>
+                        <input type="time" id="shiftEnd">
                     </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="shiftHours">Hours Worked *</label>
+                    <input type="number" id="shiftHours" step="0.5" min="0" required>
                 </div>
                 
                 <div class="form-group">

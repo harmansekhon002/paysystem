@@ -1348,6 +1348,7 @@ function showShiftModal(shiftId = null) {
         document.getElementById('shiftDate').value = shift.date;
         document.getElementById('shiftStart').value = shift.start_time;
         document.getElementById('shiftEnd').value = shift.end_time;
+        document.getElementById('shiftHours').value = shift.hours;
         document.getElementById('shiftNotes').value = shift.notes || '';
     } else {
         document.getElementById('shiftModalTitle').textContent = 'Add Shift';
@@ -1454,11 +1455,20 @@ window.onclick = (event) => {
 // CRUD Operations
 async function saveShift() {
     const id = document.getElementById('shiftId').value;
+    const workplaceId = parseInt(document.getElementById('shiftWorkplace').value);
+    const hours = parseFloat(document.getElementById('shiftHours').value);
+    
+    // Find the workplace to get base_rate
+    const workplace = workplaces.find(w => w.id === workplaceId);
+    let totalPay = hours * (workplace ? workplace.base_rate : 20);  // Default to $20/hr if workplace not found
+    
     const data = {
-        workplace_id: parseInt(document.getElementById('shiftWorkplace').value),
+        workplace_id: workplaceId,
         date: document.getElementById('shiftDate').value,
         start_time: document.getElementById('shiftStart').value,
         end_time: document.getElementById('shiftEnd').value,
+        hours: hours,
+        total_pay: totalPay,
         notes: document.getElementById('shiftNotes').value
     };
     
@@ -1474,7 +1484,7 @@ async function saveShift() {
         
         if (!response.ok) {
             const err = await response.json();
-            throw new Error(err.error || 'Failed to save shift');
+            throw new Error(err.error || err.errors?.join(', ') || 'Failed to save shift');
         }
         
         closeModal('shiftModal');
