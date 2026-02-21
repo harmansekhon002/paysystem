@@ -66,7 +66,8 @@ def init_db():
                     user_id INTEGER NOT NULL,
                     name VARCHAR(255) NOT NULL,
                     base_rate REAL NOT NULL,
-                    weekend_multiplier REAL DEFAULT 1.5,
+                    saturday_multiplier REAL DEFAULT 1.5,
+                    sunday_multiplier REAL DEFAULT 2.0,
                     public_holiday_multiplier REAL DEFAULT 2.5,
                     overtime_multiplier REAL DEFAULT 1.5,
                     overtime_threshold REAL DEFAULT 8.0,
@@ -154,7 +155,8 @@ def init_db():
                     user_id INTEGER NOT NULL,
                     name TEXT NOT NULL,
                     base_rate REAL NOT NULL,
-                    weekend_multiplier REAL DEFAULT 1.5,
+                    saturday_multiplier REAL DEFAULT 1.5,
+                    sunday_multiplier REAL DEFAULT 2.0,
                     public_holiday_multiplier REAL DEFAULT 2.5,
                     overtime_multiplier REAL DEFAULT 1.5,
                     overtime_threshold REAL DEFAULT 8.0,
@@ -460,6 +462,32 @@ def validate_goal_data(data):
     
     return errors
 
+def calculate_shift_pay(base_rate, hours, date_str, workplace_data=None):
+    """Calculate shift pay based on day of week and rates"""
+    from datetime import datetime
+    
+    try:
+        # Parse date
+        shift_date = datetime.strptime(date_str, '%Y-%m-%d')
+        day_of_week = shift_date.weekday()  # 0=Monday, 5=Saturday, 6=Sunday
+        
+        # Default multipliers if not provided
+        saturday_mult = workplace_data.get('saturday_multiplier', 1.5) if workplace_data else 1.5
+        sunday_mult = workplace_data.get('sunday_multiplier', 2.0) if workplace_data else 2.0
+        
+        # Apply multiplier based on day
+        if day_of_week == 5:  # Saturday
+            rate = base_rate * saturday_mult
+        elif day_of_week == 6:  # Sunday
+            rate = base_rate * sunday_mult
+        else:  # Weekday
+            rate = base_rate
+        
+        return rate * hours
+    except:
+        # Fallback to simple calculation
+        return base_rate * hours
+
 # ============ AUTHENTICATION ENDPOINTS ============
 @app.route('/api/auth/register', methods=['POST'])
 def register():
@@ -585,18 +613,168 @@ def get_profile():
         cursor.close()
         conn.close()
 
-# ============ SHIFT ENDPOINTS ============
-@app.route('/api/shifts', methods=['GET'])
+# ============ WORKPLACE ENDPOINTS ============
+@app.route('/api/workplaces', methods=['GET'])
 @token_required
-def get_shifts():
-    """Get all shifts for current user"""
+def get_workplaces():
+    """Get all workplaces for current user"""
     conn = get_db()
     cursor = conn.cursor()
     
     try:
         cursor.execute('''
-            SELECT id, workplace_id, date, start_time, end_time, hours, shift_type, total_pay, notes
-            FROM shifts WHERE user_id = ? ORDER BY date DESC
+            SELECT id, name, base_rate, saturday_multiplier, sunday_multiplier, 
+                   public_holiday_multiplier, overtime_multiplier, overtime_threshold
+            FROM workplaces WHERE user_id = ? ORDER BY name ASC
+        ''', (request.user_id,))
+        
+        workplaces = []
+        for row in cursor.fetchall():
+            workplaces.append({
+                'id': row[0],
+                'name': row[1],
+                'base_rate': row[2],
+                'saturday_multiplier': row[3],
+                'sunday_multiplier': row[4],
+                'public_holiday_multiplier': row[5],
+                'overtime_multiplier': row[6],
+                'overtime_threshold': row[7]
+            })
+        
+        return jsonify(workplaces), 200
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/workplaces', methods=['POST'])
+@token_required
+def create_workplace():
+    """Create new workplace"""
+    data = request.get_json()
+    
+    # Validation
+    if not data.get('name') or not data.get('base_rate'):
+        return jsonify({'error': 'Name and base_rate are required'}), 400
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            INSERT INTO workplaces 
+            (user_id, name, base_rate, saturday_multiplier, sunday_multiplier, 
+             public_holiday_multiplier, overtime_multiplier, overtime_threshold)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            request.user_id,
+            data['name'],
+            data['base_rate'],
+            data.get('saturday_multiplier', 1.5),
+            data.get('sunday_multiplier', 2.0),
+            data.get('public_holiday_multiplier', 2.5),
+            data.get('overtime_multiplier', 1.5),
+            data.get('overtime_threshold', 8.0)
+        ))
+        
+        workplace_id = cursor.lastrowid
+        conn.commit()
+        
+        return jsonify({'id': workplace_id, 'success': True}), 201
+    
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/workplaces/<int:workplace_id>', methods=['PUT'])
+@token_required
+def update_workplace(workplace_id):
+    """Update workplace"""
+    data = request.get_json()
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Check ownership
+        cursor.execute('SELECT user_id FROM workplaces WHERE id = ?', (workplace_id,))
+        result = cursor.fetchone()
+        if not result or result[0] != request.user_id:
+            return jsonify({'error': 'Unauthorized'}), 403
+        
+        cursor.execute('''
+            UPDATE workplaces SET 
+                name = ?, base_rate = ?, saturday_multiplier = ?, sunday_multiplier = ?,
+                public_holiday_multiplier = ?, overtime_multiplier = ?, overtime_threshold = ?
+            WHERE id = ? AND user_id = ?
+        ''', (
+            data.get('name'),
+            data.get('base_rate'),
+            data.get('saturday_multiplier'),
+            data.get('sunday_multiplier'),
+            data.get('public_holiday_multiplier'),
+            data.get('overtime_multiplier'),
+            data.get('overtime_threshold'),
+            workplace_id,
+            request.user_id
+        ))
+        
+        conn.commit()
+        return jsonify({'success': True}), 200
+    
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/workplaces/<int:workplace_id>', methods=['DELETE'])
+@token_required
+def delete_workplace(workplace_id):
+    """Delete workplace"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        # Check ownership
+        cursor.execute('SELECT user_id FROM workplaces WHERE id = ?', (workplace_id,))
+        result = cursor.fetchone()
+        if not result or result[0] != request.user_id:
+            return jsonify({'error': 'Unauthorized'}), 403
+        
+        cursor.execute('DELETE FROM workplaces WHERE id = ?', (workplace_id,))
+        conn.commit()
+        
+        return jsonify({'success': True}), 200
+    
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# ============ SHIFT ENDPOINTS ============
+@app.route('/api/shifts', methods=['GET'])
+@token_required
+def get_shifts():
+    """Get all shifts for current user with workplace details"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            SELECT s.id, s.workplace_id, w.name, s.date, s.start_time, s.end_time, 
+                   s.hours, s.shift_type, s.total_pay, s.notes
+            FROM shifts s
+            LEFT JOIN workplaces w ON s.workplace_id = w.id
+            WHERE s.user_id = ? ORDER BY s.date DESC
         ''', (request.user_id,))
         
         shifts = []
@@ -604,13 +782,14 @@ def get_shifts():
             shifts.append({
                 'id': row[0],
                 'workplace_id': row[1],
-                'date': row[2],
-                'start_time': row[3],
-                'end_time': row[4],
-                'hours': row[5],
-                'shift_type': row[6],
-                'total_pay': row[7],
-                'notes': row[8]
+                'workplace_name': row[2],
+                'date': row[3],
+                'start_time': row[4],
+                'end_time': row[5],
+                'hours': row[6],
+                'shift_type': row[7],
+                'total_pay': row[8],
+                'notes': row[9]
             })
         
         return jsonify(shifts), 200
@@ -624,7 +803,7 @@ def get_shifts():
 @app.route('/api/shifts', methods=['POST'])
 @token_required
 def create_shift():
-    """Create new shift"""
+    """Create new shift - calculates pay based on day of week and workplace rates"""
     data = request.get_json()
     
     # Validation
@@ -636,6 +815,23 @@ def create_shift():
     cursor = conn.cursor()
     
     try:
+        # Calculate pay based on day of week if workplace_id is provided
+        total_pay = data.get('total_pay')
+        if data.get('workplace_id'):
+            cursor.execute('''
+                SELECT base_rate, saturday_multiplier, sunday_multiplier 
+                FROM workplaces WHERE id = ? AND user_id = ?
+            ''', (data.get('workplace_id'), request.user_id))
+            workplace = cursor.fetchone()
+            
+            if workplace:
+                workplace_data = {
+                    'base_rate': workplace[0],
+                    'saturday_multiplier': workplace[1],
+                    'sunday_multiplier': workplace[2]
+                }
+                total_pay = calculate_shift_pay(workplace[0], data['hours'], data['date'], workplace_data)
+        
         cursor.execute('''
             INSERT INTO shifts (user_id, workplace_id, date, start_time, end_time, hours, shift_type, total_pay, notes)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -647,7 +843,7 @@ def create_shift():
             data.get('end_time', ''),
             data['hours'],
             data.get('shift_type', 'regular'),
-            data['total_pay'],
+            total_pay,
             data.get('notes', '')
         ))
         

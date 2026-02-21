@@ -3,379 +3,262 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payroll & Budget Manager</title>
+    <title>Payroll & Budget Management System</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
-    <!-- Auth Screen -->
-    <div id="authScreen" class="auth-screen active">
-        <div class="auth-container">
-            <div class="auth-box">
-                <div class="auth-header">
-                    <h1>💰 Payroll Manager</h1>
-                    <p>Track shifts, expenses, and goals</p>
-                </div>
-                
-                <!-- Login Tab -->
-                <div id="loginTab" class="auth-form-container active">
-                    <form id="loginForm" onsubmit="handleLogin(event)">
-                        <h2>Login</h2>
-                        <input type="email" id="loginEmail" placeholder="Email" required>
-                        <input type="password" id="loginPassword" placeholder="Password" required>
-                        <button type="submit">Login</button>
-                        <div style="text-align:center; margin-top:15px; font-size:14px;">
-                            Don't have an account? <a href="#" onclick="event.preventDefault(); switchAuthTab('signup'); return false;">Sign up</a>
-                        </div>
-                    </form>
-                </div>
-                
-                <!-- Signup Tab -->
-                <div id="signupTab" class="auth-form-container">
-                    <form id="signupForm" onsubmit="handleSignup(event)">
-                        <h2>Create Account</h2>
-                        <input type="text" id="signupName" placeholder="Full Name" required>
-                        <input type="email" id="signupEmail" placeholder="Email" required>
-                        <input type="password" id="signupPassword" placeholder="Password (min 6 chars)" required>
-                        <button type="submit">Sign Up</button>
-                        <div style="text-align:center; margin-top:15px; font-size:14px;">
-                            Have an account? <a href="#" onclick="event.preventDefault(); switchAuthTab('login'); return false;">Login</a>
-                        </div>
-                    </form>
-                </div>
-                
-                <div id="authError" class="auth-error"></div>
+    <!-- Authentication Screen -->
+    <div id="authScreen" class="auth-container active">
+        <div class="auth-box">
+            <h1>💰 Payroll System</h1>
+            
+            <div class="auth-tabs">
+                <button id="loginTabBtn" class="tab-btn active" onclick="switchAuthTab('login')">Login</button>
+                <button id="signupTabBtn" class="tab-btn" onclick="switchAuthTab('signup')">Sign Up</button>
+            </div>
+
+            <div id="authError" class="error-message"></div>
+
+            <!-- Login Tab -->
+            <div id="loginTab" class="auth-tab active">
+                <form onsubmit="handleLogin(event)">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input 
+                            type="email" 
+                            id="loginEmail" 
+                            placeholder="test@test.com"
+                            required
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input 
+                            type="password" 
+                            id="loginPassword" 
+                            placeholder="test123"
+                            required
+                        />
+                    </div>
+                    <button type="submit" class="btn btn-primary">Login</button>
+                </form>
+            </div>
+
+            <!-- Signup Tab -->
+            <div id="signupTab" class="auth-tab">
+                <form onsubmit="handleSignup(event)">
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input 
+                            type="text" 
+                            id="signupName" 
+                            placeholder="Your Name"
+                            required
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input 
+                            type="email" 
+                            id="signupEmail" 
+                            placeholder="your@email.com"
+                            required
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input 
+                            type="password" 
+                            id="signupPassword" 
+                            placeholder="Enter password"
+                            required
+                        />
+                    </div>
+                    <button type="submit" class="btn btn-primary">Sign Up</button>
+                </form>
             </div>
         </div>
     </div>
 
-    <!-- Main App -->
-    <div class="app-shell">
-
-        <aside class="sidebar">
-            <div class="brand">
-                <div class="brand-mark">💵</div>
-                <div class="brand-text">
-                    <div class="brand-title">Payroll</div>
-                    <div class="brand-subtitle">Manager</div>
-                </div>
+    <!-- Main App Container -->
+    <div id="mainApp" class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <h1>💰 Payroll & Budget Manager</h1>
             </div>
-
-            <nav class="sidebar-nav">
-                <button class="tab active" data-tab="dashboard" onclick="showTab('dashboard', event)">
-                    <span class="tab-icon">🏠</span>
-                    <span class="tab-label">Dashboard</span>
-                </button>
-                <button class="tab" data-tab="shifts" onclick="showTab('shifts', event)">
-                    <span class="tab-icon">📋</span>
-                    <span class="tab-label">Shifts</span>
-                </button>
-                <button class="tab" data-tab="workplaces" onclick="showTab('workplaces', event)">
-                    <span class="tab-icon">🏢</span>
-                    <span class="tab-label">Workplaces</span>
-                </button>
-                <button class="tab" data-tab="goals" onclick="showTab('goals', event)">
-                    <span class="tab-icon">🎯</span>
-                    <span class="tab-label">Goals</span>
-                </button>
-                <button class="tab" data-tab="budget" onclick="showTab('budget', event)">
-                    <span class="tab-icon">💳</span>
-                    <span class="tab-label">Budget</span>
-                </button>
-            </nav>
-
-            <div class="sidebar-foot">
-                <button class="logout-btn" onclick="handleLogout()">← Logout</button>
+            <div class="header-right">
+                <span id="userName" class="user-name"></span>
+                <button onclick="handleLogout()" class="btn btn-secondary">Logout</button>
             </div>
-        </aside>
+        </header>
 
-        <div class="main-content">
-            <!-- Header -->
-            <header class="app-header">
-                <div class="header-title">
-                    <h1>Payroll & Budget Manager</h1>
-                    <p>Track shifts, spending, and goals with clarity.</p>
-                </div>
-                <div class="theme-switcher">
-                    <button class="theme-btn active" data-theme="default" onclick="setTheme('default')" title="Default Theme">🌙</button>
-                    <button class="theme-btn" data-theme="light" onclick="setTheme('light')" title="Light Theme">☀️</button>
-                    <button class="theme-btn" data-theme="blue" onclick="setTheme('blue')" title="Ocean Theme">🌊</button>
-                    <button class="theme-btn" data-theme="purple" onclick="setTheme('purple')" title="Purple Theme">🔮</button>
-                </div>
-                <div class="fortnight-summary" id="fortnightSummary">
-                    <div class="summary-card earnings">
-                        <span class="label">💵 Total Earned</span>
-                        <span class="value" id="fortnightEarned">$0.00</span>
-                    </div>
-                    <div class="summary-card expenses">
-                        <span class="label">💸 Total Expenses</span>
-                        <span class="value negative" id="fortnightExpenses">$0.00</span>
-                    </div>
-                    <div class="summary-card goals">
-                        <span class="label">🎯 Goals Saved</span>
-                        <span class="value" id="fortnightGoals">$0.00</span>
-                    </div>
-                    <div class="summary-card net">
-                        <span class="label">✨ Available Money</span>
-                        <span class="value highlight" id="netIncome">$0.00</span>
-                    </div>
-                </div>
-            </header>
+        <!-- Navigation Tabs -->
+        <nav class="app-nav">
+            <button class="nav-btn active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 Dashboard</button>
+            <button class="nav-btn" data-tab="shifts" onclick="switchTab('shifts')">⏰ Shifts</button>
+            <button class="nav-btn" data-tab="workplaces" onclick="switchTab('workplaces')">🏢 Workplaces</button>
+            <button class="nav-btn" data-tab="expenses" onclick="switchTab('expenses')">💳 Expenses</button>
+            <button class="nav-btn" data-tab="goals" onclick="switchTab('goals')">🎯 Goals</button>
+            <button class="nav-btn" data-tab="budget" onclick="switchTab('budget')">💰 Budget</button>
+        </nav>
 
-        <!-- Dashboard Tab -->
-        <div id="dashboard" class="tab-content active">
-            <!-- Dashboard View Tabs -->
-            <div class="dashboard-tabs">
-                <button class="dashboard-tab active" onclick="switchDashboardView('overview')">Overview</button>
-                <button class="dashboard-tab" onclick="switchDashboardView('analytics')">Analytics</button>
-                <button class="dashboard-tab" onclick="switchDashboardView('goals')">Goals</button>
-            </div>
-            
-            <!-- Overview View -->
-            <div id="overview-view" class="dashboard-view active">
+        <!-- Content Area -->
+        <main class="app-content">
+            <!-- Dashboard Tab -->
+            <section id="dashboard" class="tab-content active">
                 <div class="dashboard-grid">
-                    <div class="card">
-                        <h2>📊 Quick Stats</h2>
-                        <div id="quickStats" class="stats-grid"></div>
+                    <div class="stat-card">
+                        <div class="stat-label">This Week</div>
+                        <div class="stat-value" id="weekEarnings">$0.00</div>
+                        <div class="stat-subtitle" id="weekHours">0 hours</div>
                     </div>
-                    
-                    <div class="card">
-                        <h2>🎯 This Week Summary</h2>
-                        <div id="budgetOverview" class="budget-summary"></div>
+                    <div class="stat-card">
+                        <div class="stat-label">This Fortnight</div>
+                        <div class="stat-value" id="fortnightEarnings">$0.00</div>
+                        <div class="stat-subtitle" id="fortnightHours">0 hours</div>
                     </div>
-                    
-                    <div class="card">
-                        <h2>📋 Recent Shifts</h2>
-                        <div id="recentShifts" class="list-container"></div>
+                    <div class="stat-card">
+                        <div class="stat-label">Total Expenses</div>
+                        <div class="stat-value" id="totalExpenses">$0.00</div>
+                        <div class="stat-subtitle">This fortnight</div>
                     </div>
-                    
-                    <div class="card">
-                        <h2>⚠️ Goals Status</h2>
-                        <div id="goalsStatus" class="goals-status"></div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Analytics View -->
-            <div id="analytics-view" class="dashboard-view">
-                <div class="dashboard-grid">
-                    <div class="card">
-                        <h2>� Spending by Category</h2>
-                        <div class="chart-container">
-                            <canvas id="spendingChart"></canvas>
-                        </div>
-                    </div>
-                    
-                    <div class="card">
-                        <h2>📈 Income Growth</h2>
-                        <div class="chart-container">
-                            <canvas id="incomeChart"></canvas>
-                        </div>
-                    </div>
-                    
-                    <div class="card">
-                        <h2>💸 Expense Breakdown</h2>
-                        <div id="expenseBreakdown" class="expense-chart"></div>
-                    </div>
-                    
-                    <div class="card">
-                        <h2>⏰ Work Analysis</h2>
-                        <div id="workAnalysis" class="work-stats"></div>
+                    <div class="stat-card">
+                        <div class="stat-label">Available</div>
+                        <div class="stat-value" id="availableBalance">$0.00</div>
+                        <div class="stat-subtitle">After expenses</div>
                     </div>
                 </div>
-            </div>
-            
-            <!-- Goals View -->
-            <div id="goals-view" class="dashboard-view">
-                <div class="dashboard-grid">
-                    <div class="card">
-                        <h2>💰 Savings vs Spending</h2>
-                        <div id="savingsAnalysis" class="savings-chart"></div>
-                    </div>
-                    
-                    <div class="card">
-                        <h2>📊 Full Statistics</h2>
-                        <div id="usageStats" class="stats-container"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- Shifts Tab -->
-        <div id="shifts" class="tab-content">
-            <div class="card">
-                <div class="card-header">
-                    <h2>My Shifts</h2>
-                    <div style="display: flex; gap: 10px;">
-                        <button class="btn btn-secondary" onclick="toggleSearch()">🔍 Search</button>
-                        <button class="btn btn-secondary" onclick="exportShifts()">📥 Export</button>
-                        <button class="btn btn-primary" onclick="showShiftModal()">+ Add Shift</button>
-                    </div>
+                <div class="dashboard-section">
+                    <h3>Recent Shifts</h3>
+                    <div id="recentShifts" class="shifts-list"></div>
                 </div>
-                
-                <div id="searchPanel" class="search-panel" style="display: none;">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>From Date</label>
-                            <input type="date" id="searchStartDate">
-                        </div>
-                        <div class="form-group">
-                            <label>To Date</label>
-                            <input type="date" id="searchEndDate">
-                        </div>
-                        <div class="form-group">
-                            <label>Workplace</label>
-                            <select id="searchWorkplace">
-                                <option value="">All Workplaces</option>
-                            </select>
-                        </div>
-                        <div class="form-group" style="display: flex; align-items: flex-end;">
-                            <button class="btn btn-primary" onclick="searchShifts()" style="margin-right: 10px;">Search</button>
-                            <button class="btn btn-secondary" onclick="clearSearch()">Clear</button>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="list-controls">
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <input type="checkbox" id="selectAllShifts" onchange="toggleSelectAll('shifts')">
-                        <label for="selectAllShifts">Select All</label>
-                        <button class="btn btn-danger btn-sm" id="bulkDeleteShifts" onclick="bulkDeleteShifts()" style="display: none;">🗑 Delete Selected</button>
-                        <span id="selectedShiftsCount" style="font-size: 13px; color: var(--gray);"></span>
-                    </div>
-                    <div>
-                        <label>Sort by:</label>
-                        <select id="shiftsSort" onchange="sortAndRenderShifts()">
-                            <option value="date-desc">Date (Newest First)</option>
-                            <option value="date-asc">Date (Oldest First)</option>
-                            <option value="pay-desc">Pay (Highest First)</option>
-                            <option value="pay-asc">Pay (Lowest First)</option>
-                            <option value="hours-desc">Hours (Most First)</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div id="shiftsList" class="table-container"></div>
-            </div>
-        </div>
 
-        <!-- Workplaces Tab -->
-        <div id="workplaces" class="tab-content">
-            <div class="card">
-                <div class="card-header">
+                <div class="dashboard-section">
+                    <h3>Top Goals</h3>
+                    <div id="topGoals" class="goals-list"></div>
+                </div>
+            </section>
+
+            <!-- Shifts Tab -->
+            <section id="shifts" class="tab-content">
+                <div class="section-header">
+                    <h2>Shifts</h2>
+                    <button class="btn btn-primary" onclick="showShiftModal()">+ Add Shift</button>
+                </div>
+
+                <div id="shiftsContainer" class="shifts-list">
+                    <p class="empty-message">No shifts yet. Add one to get started!</p>
+                </div>
+            </section>
+
+            <!-- Workplaces Tab -->
+            <section id="workplaces" class="tab-content">
+                <div class="section-header">
                     <h2>Workplaces</h2>
                     <button class="btn btn-primary" onclick="showWorkplaceModal()">+ Add Workplace</button>
                 </div>
-                <div id="workplacesList" class="table-container"></div>
-            </div>
-        </div>
 
-        <!-- Goals Tab -->
-        <div id="goals" class="tab-content">
-            <div class="card">
-                <div class="card-header">
+                <div id="workplacesContainer" class="workplaces-grid">
+                    <p class="empty-message">No workplaces yet. Add one to get started!</p>
+                </div>
+            </section>
+
+            <!-- Expenses Tab -->
+            <section id="expenses" class="tab-content">
+                <div class="section-header">
+                    <h2>Expenses</h2>
+                    <button class="btn btn-primary" onclick="showExpenseModal()">+ Add Expense</button>
+                </div>
+
+                <div id="expensesContainer" class="expenses-list">
+                    <p class="empty-message">No expenses yet. Add one to get started!</p>
+                </div>
+            </section>
+
+            <!-- Goals Tab -->
+            <section id="goals" class="tab-content">
+                <div class="section-header">
                     <h2>Financial Goals</h2>
                     <button class="btn btn-primary" onclick="showGoalModal()">+ Add Goal</button>
                 </div>
-                
-                <div class="list-controls">
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <input type="checkbox" id="selectAllGoals" onchange="toggleSelectAll('goals')">
-                        <label for="selectAllGoals">Select All</label>
-                        <button class="btn btn-danger btn-sm" id="bulkDeleteGoals" onclick="bulkDeleteGoals()" style="display: none;">🗑 Delete Selected</button>
-                        <span id="selectedGoalsCount" style="font-size: 13px; color: var(--gray);"></span>
-                    </div>
-                    <div>
-                        <label>Sort by:</label>
-                        <select id="goalsSort" onchange="sortAndRenderGoals()">
-                            <option value="priority">Priority</option>
-                            <option value="deadline">Deadline</option>
-                            <option value="progress-desc">Progress (Highest)</option>
-                            <option value="progress-asc">Progress (Lowest)</option>
-                            <option value="target-desc">Target Amount (Highest)</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div id="goalsList" class="goals-grid draggable-container"></div>
-            </div>
-        </div>
 
-        <!-- Budget Tab -->
-        <div id="budget" class="tab-content">
-            <div class="card">
-                <div class="card-header">
-                    <h2>Budget & Expenses</h2>
-                    <button class="btn btn-primary" onclick="showExpenseModal()">+ Add Expense</button>
+                <div id="goalsContainer" class="goals-list">
+                    <p class="empty-message">No goals yet. Add one to start saving!</p>
                 </div>
-                
-                <div class="list-controls">
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <input type="checkbox" id="selectAllExpenses" onchange="toggleSelectAll('expenses')">
-                        <label for="selectAllExpenses">Select All</label>
-                        <button class="btn btn-danger btn-sm" id="bulkDeleteExpenses" onclick="bulkDeleteExpenses()" style="display: none;">🗑 Delete Selected</button>
-                        <span id="selectedExpensesCount" style="font-size: 13px; color: var(--gray);"></span>
-                    </div>
-                    <div>
-                        <label>Sort by:</label>
-                        <select id="expensesSort" onchange="sortAndRenderExpenses()">
-                            <option value="date-desc">Date (Newest First)</option>
-                            <option value="date-asc">Date (Oldest First)</option>
-                            <option value="amount-desc">Amount (Highest First)</option>
-                            <option value="amount-asc">Amount (Lowest First)</option>
-                            <option value="category">Category</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div id="expensesList" class="table-container"></div>
-            </div>
-        </div>
+            </section>
 
-        </div>
+            <!-- Budget Tab -->
+            <section id="budget" class="tab-content">
+                <div class="section-header">
+                    <h2>Budget Overview</h2>
+                </div>
+
+                <div class="budget-summary">
+                    <div class="budget-item">
+                        <span class="label">Total Income:</span>
+                        <span class="value" id="budgetIncome">$0.00</span>
+                    </div>
+                    <div class="budget-item">
+                        <span class="label">Total Expenses:</span>
+                        <span class="value" id="budgetExpenses">$0.00</span>
+                    </div>
+                    <div class="budget-item">
+                        <span class="label">Goal Savings:</span>
+                        <span class="value" id="budgetGoals">$0.00</span>
+                    </div>
+                    <div class="budget-item total">
+                        <span class="label">Available:</span>
+                        <span class="value" id="budgetRemaining">$0.00</span>
+                    </div>
+                </div>
+
+                <div class="budget-breakdown">
+                    <h3>Expense Breakdown</h3>
+                    <div id="expenseBreakdown" class="breakdown-list"></div>
+                </div>
+            </section>
+        </main>
     </div>
 
+    <!-- Modals -->
     <!-- Shift Modal -->
     <div id="shiftModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="shiftModalTitle">Add Shift</h2>
-                <span class="close" onclick="closeModal('shiftModal')">&times;</span>
+                <button class="close-btn" onclick="document.getElementById('shiftModal').classList.remove('active')">&times;</button>
             </div>
-            <form id="shiftForm">
-                <input type="hidden" id="shiftId">
-                
+            <form id="shiftForm" onsubmit="saveShift(event)">
+                <input type="hidden" id="shiftId" />
                 <div class="form-group">
-                    <label for="shiftWorkplace">Workplace *</label>
-                    <select id="shiftWorkplace" required></select>
+                    <label>Workplace</label>
+                    <select id="shiftWorkplace" required>
+                        <option value="">Select workplace</option>
+                    </select>
                 </div>
-                
                 <div class="form-group">
-                    <label for="shiftDate">Date *</label>
-                    <input type="date" id="shiftDate" required>
+                    <label>Date</label>
+                    <input type="date" id="shiftDate" required />
                 </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="shiftStart">Start Time *</label>
-                        <input type="time" id="shiftStart" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="shiftEnd">End Time *</label>
-                        <input type="time" id="shiftEnd" required>
-                    </div>
-                </div>
-                
                 <div class="form-group">
-                    <label for="shiftNotes">Notes</label>
+                    <label>Start Time</label>
+                    <input type="time" id="shiftStart" />
+                </div>
+                <div class="form-group">
+                    <label>End Time</label>
+                    <input type="time" id="shiftEnd" />
+                </div>
+                <div class="form-group">
+                    <label>Hours</label>
+                    <input type="number" id="shiftHours" step="0.5" required />
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
                     <textarea id="shiftNotes" rows="3"></textarea>
                 </div>
-                
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('shiftModal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Shift</button>
-                </div>
+                <button type="submit" class="btn btn-primary">Save Shift</button>
             </form>
         </div>
     </div>
@@ -385,49 +268,39 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="workplaceModalTitle">Add Workplace</h2>
-                <span class="close" onclick="closeModal('workplaceModal')">&times;</span>
+                <button class="close-btn" onclick="document.getElementById('workplaceModal').classList.remove('active')">&times;</button>
             </div>
-            <form id="workplaceForm">
-                <input type="hidden" id="workplaceId">
-                
+            <form id="workplaceForm" onsubmit="saveWorkplace(event)">
+                <input type="hidden" id="workplaceId" />
                 <div class="form-group">
-                    <label for="workplaceName">Workplace Name *</label>
-                    <input type="text" id="workplaceName" required>
+                    <label>Workplace Name</label>
+                    <input type="text" id="workplaceName" required />
                 </div>
-                
                 <div class="form-group">
-                    <label for="baseRate">Base Hourly Rate (AUD) *</label>
-                    <input type="number" id="baseRate" step="0.01" min="0" required>
+                    <label>Base Rate ($/hour)</label>
+                    <input type="number" id="baseRate" step="0.01" required />
                 </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="weekendMultiplier">Weekend Rate (×)</label>
-                        <input type="number" id="weekendMultiplier" step="0.1" value="1.5">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="publicHolidayMultiplier">Public Holiday Rate (×)</label>
-                        <input type="number" id="publicHolidayMultiplier" step="0.1" value="2.5">
-                    </div>
+                <div class="form-group">
+                    <label>Saturday Multiplier</label>
+                    <input type="number" id="saturdayMultiplier" step="0.1" value="1.5" />
                 </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="overtimeMultiplier">Overtime Rate (×)</label>
-                        <input type="number" id="overtimeMultiplier" step="0.1" value="1.5">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="overtimeThreshold">Overtime After (hours)</label>
-                        <input type="number" id="overtimeThreshold" step="0.5" value="8">
-                    </div>
+                <div class="form-group">
+                    <label>Sunday Multiplier</label>
+                    <input type="number" id="sundayMultiplier" step="0.1" value="2.0" />
                 </div>
-                
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('workplaceModal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Workplace</button>
+                <div class="form-group">
+                    <label>Public Holiday Multiplier</label>
+                    <input type="number" id="publicHolidayMultiplier" step="0.1" value="2.5" />
                 </div>
+                <div class="form-group">
+                    <label>Overtime Multiplier</label>
+                    <input type="number" id="overtimeMultiplier" step="0.1" value="1.5" />
+                </div>
+                <div class="form-group">
+                    <label>Overtime Threshold (hours)</label>
+                    <input type="number" id="overtimeThreshold" step="0.5" value="8" />
+                </div>
+                <button type="submit" class="btn btn-primary">Save Workplace</button>
             </form>
         </div>
     </div>
@@ -437,50 +310,41 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="expenseModalTitle">Add Expense</h2>
-                <span class="close" onclick="closeModal('expenseModal')">&times;</span>
+                <button class="close-btn" onclick="document.getElementById('expenseModal').classList.remove('active')">&times;</button>
             </div>
-            <form id="expenseForm">
-                <input type="hidden" id="expenseId">
-                
+            <form id="expenseForm" onsubmit="saveExpense(event)">
+                <input type="hidden" id="expenseId" />
                 <div class="form-group">
-                    <label for="expenseCategory">Category *</label>
+                    <label>Category</label>
                     <select id="expenseCategory" required>
+                        <option value="">Select category</option>
                         <option value="Rent">Rent</option>
                         <option value="Groceries">Groceries</option>
                         <option value="Utilities">Utilities</option>
                         <option value="Transport">Transport</option>
                         <option value="Entertainment">Entertainment</option>
-                        <option value="Healthcare">Healthcare</option>
                         <option value="Other">Other</option>
                     </select>
                 </div>
-                
                 <div class="form-group">
-                    <label for="expenseAmount">Amount (AUD) *</label>
-                    <input type="number" id="expenseAmount" step="0.01" min="0" required>
+                    <label>Amount</label>
+                    <input type="number" id="expenseAmount" step="0.01" required />
                 </div>
-                
                 <div class="form-group">
-                    <label for="expenseDueDate">Due Date</label>
-                    <input type="date" id="expenseDueDate">
+                    <label>Due Date</label>
+                    <input type="date" id="expenseDueDate" />
                 </div>
-                
                 <div class="form-group">
                     <label>
-                        <input type="checkbox" id="expenseRecurring" checked>
-                        Recurring (include in fortnight calculation)
+                        <input type="checkbox" id="expenseRecurring" />
+                        Recurring Expense
                     </label>
                 </div>
-                
                 <div class="form-group">
-                    <label for="expenseNotes">Notes</label>
+                    <label>Notes</label>
                     <textarea id="expenseNotes" rows="3"></textarea>
                 </div>
-                
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('expenseModal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Expense</button>
-                </div>
+                <button type="submit" class="btn btn-primary">Save Expense</button>
             </form>
         </div>
     </div>
@@ -490,88 +354,52 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="goalModalTitle">Add Goal</h2>
-                <span class="close" onclick="closeModal('goalModal')">&times;</span>
+                <button class="close-btn" onclick="document.getElementById('goalModal').classList.remove('active')">&times;</button>
             </div>
-            <form id="goalForm">
-                <input type="hidden" id="goalId">
-                
+            <form id="goalForm" onsubmit="saveGoal(event)">
+                <input type="hidden" id="goalId" />
                 <div class="form-group">
-                    <label for="goalName">Goal Name *</label>
-                    <input type="text" id="goalName" placeholder="e.g., College Fees, Holiday, Emergency Fund" required>
+                    <label>Goal Name</label>
+                    <input type="text" id="goalName" required />
                 </div>
-                
                 <div class="form-group">
-                    <label for="goalTarget">Target Amount (AUD) *</label>
-                    <input type="number" id="goalTarget" step="0.01" min="0" required>
+                    <label>Target Amount</label>
+                    <input type="number" id="goalTargetAmount" step="0.01" required />
                 </div>
-                
                 <div class="form-group">
-                    <label for="goalDeadline">Target Date</label>
-                    <input type="date" id="goalDeadline">
+                    <label>Deadline</label>
+                    <input type="date" id="goalDeadline" />
                 </div>
-                
                 <div class="form-group">
-                    <label for="goalAutoAllocate">Auto-save per Fortnight (AUD)</label>
-                    <input type="number" id="goalAutoAllocate" step="0.01" min="0" value="0">
-                    <small>Automatically set aside this amount each fortnight</small>
+                    <label>Auto-Allocate ($/fortnight)</label>
+                    <input type="number" id="goalAutoAllocate" step="0.01" value="0" />
                 </div>
-                
                 <div class="form-group">
-                    <label for="goalPriority">Priority</label>
+                    <label>Priority</label>
                     <select id="goalPriority">
-                        <option value="3">High</option>
-                        <option value="2" selected>Medium</option>
-                        <option value="1">Low</option>
+                        <option value="1">High</option>
+                        <option value="2">Medium</option>
+                        <option value="3">Low</option>
                     </select>
                 </div>
-                
-                <div class="form-group">
-                    <label for="goalNotes">Notes</label>
-                    <textarea id="goalNotes" rows="3"></textarea>
-                </div>
-                
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('goalModal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Goal</button>
-                </div>
+                <button type="submit" class="btn btn-primary">Save Goal</button>
             </form>
         </div>
     </div>
 
-    <!-- Contribute to Goal Modal -->
-    <div id="contributeModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Add Money to Goal</h2>
-                <span class="close" onclick="closeModal('contributeModal')">&times;</span>
-            </div>
-            <form id="contributeForm">
-                <input type="hidden" id="contributeGoalId">
-                
-                <div class="form-group">
-                    <label for="contributeAmount">Amount (AUD) *</label>
-                    <input type="number" id="contributeAmount" step="0.01" min="0.01" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="contributeDate">Date</label>
-                    <input type="date" id="contributeDate" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="contributeNotes">Notes</label>
-                    <textarea id="contributeNotes" rows="2"></textarea>
-                </div>
-                
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('contributeModal')">Cancel</button>
-                    <button type="submit" class="btn btn-success">Add Money</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
+    <!-- Scripts -->
     <script src="config.js"></script>
     <script src="app.js"></script>
+
+    <script>
+        // Initialize app on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            if (isLoggedIn()) {
+                document.getElementById('authScreen').classList.remove('active');
+                loadAllData();
+                setupEventListeners();
+            }
+        });
+    </script>
 </body>
 </html>

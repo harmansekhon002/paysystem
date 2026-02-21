@@ -861,7 +861,8 @@ function renderWorkplacesList() {
                 <tr>
                     <th>Name</th>
                     <th>Base Rate</th>
-                    <th>Weekend</th>
+                    <th>Saturday</th>
+                    <th>Sunday</th>
                     <th>Public Holiday</th>
                     <th>Overtime</th>
                     <th>Actions</th>
@@ -872,11 +873,12 @@ function renderWorkplacesList() {
                     <tr>
                         <td style="font-weight: 600">${wp.name}</td>
                         <td>$${wp.base_rate.toFixed(2)}/hr</td>
-                        <td>${wp.weekend_multiplier}×</td>
+                        <td>${wp.saturday_multiplier}×</td>
+                        <td>${wp.sunday_multiplier}×</td>
                         <td>${wp.public_holiday_multiplier}×</td>
                         <td>${wp.overtime_multiplier}× (after ${wp.overtime_threshold}h)</td>
                         <td class="actions">
-                            <button class="btn btn-edit" onclick="editWorkplace(${wp.id})">Edit</button>
+                            <button class="btn btn-edit" onclick="showWorkplaceModal(${wp.id})">Edit</button>
                             <button class="btn btn-danger" onclick="deleteWorkplace(${wp.id})">Delete</button>
                         </td>
                     </tr>
@@ -885,7 +887,7 @@ function renderWorkplacesList() {
         </table>
     ` : '<div class="empty-state"><div class="empty-state-icon">🏢</div><div class="empty-state-text">No workplaces yet. Add your first workplace!</div></div>';
     
-    document.getElementById('workplacesList').innerHTML = workplacesHtml;
+    document.getElementById('workplacesContainer').innerHTML = workplacesHtml;
 }
 
 function renderExpensesList() {
@@ -1301,9 +1303,10 @@ function showShiftModal(shiftId = null) {
     
     // Populate workplaces dropdown
     const workplaceSelect = document.getElementById('shiftWorkplace');
-    workplaceSelect.innerHTML = workplaces.map(wp => 
-        `<option value="${wp.id}">${wp.name}</option>`
-    ).join('');
+    workplaceSelect.innerHTML = '<option value="">Select workplace</option>' + 
+        workplaces.map(wp => 
+            `<option value="${wp.id}">${wp.name}</option>`
+        ).join('');
     
     if (shiftId) {
         const shift = shifts.find(s => s.id === shiftId);
@@ -1334,7 +1337,8 @@ function showWorkplaceModal(workplaceId = null) {
         document.getElementById('workplaceId').value = workplace.id;
         document.getElementById('workplaceName').value = workplace.name;
         document.getElementById('baseRate').value = workplace.base_rate;
-        document.getElementById('weekendMultiplier').value = workplace.weekend_multiplier;
+        document.getElementById('saturdayMultiplier').value = workplace.saturday_multiplier;
+        document.getElementById('sundayMultiplier').value = workplace.sunday_multiplier;
         document.getElementById('publicHolidayMultiplier').value = workplace.public_holiday_multiplier;
         document.getElementById('overtimeMultiplier').value = workplace.overtime_multiplier;
         document.getElementById('overtimeThreshold').value = workplace.overtime_threshold;
@@ -1417,13 +1421,16 @@ window.onclick = (event) => {
 };
 
 // CRUD Operations
-async function saveShift() {
+async function saveShift(event) {
+    event.preventDefault();
     const id = document.getElementById('shiftId').value;
     const data = {
-        workplace_id: parseInt(document.getElementById('shiftWorkplace').value),
+        workplace_id: parseInt(document.getElementById('shiftWorkplace').value) || null,
         date: document.getElementById('shiftDate').value,
         start_time: document.getElementById('shiftStart').value,
         end_time: document.getElementById('shiftEnd').value,
+        hours: parseFloat(document.getElementById('shiftHours').value),
+        total_pay: 0, // Will be calculated by backend
         notes: document.getElementById('shiftNotes').value
     };
     
@@ -1431,26 +1438,33 @@ async function saveShift() {
     const method = id ? 'PUT' : 'POST';
     
     try {
-        await authFetch(url, {
+        const response = await authFetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
         
-        closeModal('shiftModal');
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to save shift');
+        }
+        
+        document.getElementById('shiftModal').classList.remove('active');
         await loadAllData();
     } catch (error) {
         console.error('Error saving shift:', error);
-        alert('Error saving shift');
+        alert('Error saving shift: ' + error.message);
     }
 }
 
-async function saveWorkplace() {
+async function saveWorkplace(event) {
+    event.preventDefault();
     const id = document.getElementById('workplaceId').value;
     const data = {
         name: document.getElementById('workplaceName').value,
         base_rate: parseFloat(document.getElementById('baseRate').value),
-        weekend_multiplier: parseFloat(document.getElementById('weekendMultiplier').value),
+        saturday_multiplier: parseFloat(document.getElementById('saturdayMultiplier').value),
+        sunday_multiplier: parseFloat(document.getElementById('sundayMultiplier').value),
         public_holiday_multiplier: parseFloat(document.getElementById('publicHolidayMultiplier').value),
         overtime_multiplier: parseFloat(document.getElementById('overtimeMultiplier').value),
         overtime_threshold: parseFloat(document.getElementById('overtimeThreshold').value)
@@ -1460,17 +1474,21 @@ async function saveWorkplace() {
     const method = id ? 'PUT' : 'POST';
     
     try {
-        await authFetch(url, {
+        const response = await authFetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
         
-        closeModal('workplaceModal');
+        if (!response.ok) {
+            throw new Error('Failed to save workplace');
+        }
+        
+        document.getElementById('workplaceModal').classList.remove('active');
         await loadAllData();
     } catch (error) {
         console.error('Error saving workplace:', error);
-        alert('Error saving workplace');
+        alert('Error saving workplace: ' + error.message);
     }
 }
 
