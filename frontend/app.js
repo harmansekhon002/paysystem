@@ -1430,17 +1430,22 @@ async function saveShift() {
     const method = id ? 'PUT' : 'POST';
     
     try {
-        await authFetch(url, {
+        const response = await authFetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
         
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Failed to save shift');
+        }
+        
         closeModal('shiftModal');
         await loadAllData();
     } catch (error) {
         console.error('Error saving shift:', error);
-        alert('Error saving shift');
+        alert('Error: ' + error.message);
     }
 }
 
@@ -1459,17 +1464,22 @@ async function saveWorkplace() {
     const method = id ? 'PUT' : 'POST';
     
     try {
-        await authFetch(url, {
+        const response = await authFetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
         
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Failed to save workplace');
+        }
+        
         closeModal('workplaceModal');
         await loadAllData();
     } catch (error) {
         console.error('Error saving workplace:', error);
-        alert('Error saving workplace');
+        alert('Error: ' + error.message);
     }
 }
 
@@ -1487,17 +1497,22 @@ async function saveExpense() {
     const method = id ? 'PUT' : 'POST';
     
     try {
-        await authFetch(url, {
+        const response = await authFetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
         
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Failed to save expense');
+        }
+        
         closeModal('expenseModal');
         await loadAllData();
     } catch (error) {
         console.error('Error saving expense:', error);
-        alert('Error saving expense');
+        alert('Error: ' + error.message);
     }
 }
 
@@ -1517,11 +1532,12 @@ async function deleteShift(id) {
     if (!confirm('Are you sure you want to delete this shift?')) return;
     
     try {
-        await authFetch(`${API_URL}/shifts/${id}`, { method: 'DELETE' });
+        const response = await authFetch(`${API_URL}/shifts/${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Failed to delete shift');
         await loadAllData();
     } catch (error) {
         console.error('Error deleting shift:', error);
-        alert('Error deleting shift');
+        alert('Error: ' + error.message);
     }
 }
 
@@ -1529,11 +1545,12 @@ async function deleteWorkplace(id) {
     if (!confirm('Are you sure you want to delete this workplace?')) return;
     
     try {
-        await authFetch(`${API_URL}/workplaces/${id}`, { method: 'DELETE' });
+        const response = await authFetch(`${API_URL}/workplaces/${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Failed to delete workplace');
         await loadAllData();
     } catch (error) {
         console.error('Error deleting workplace:', error);
-        alert('Error deleting workplace');
+        alert('Error: ' + error.message);
     }
 }
 
@@ -1541,11 +1558,12 @@ async function deleteExpense(id) {
     if (!confirm('Are you sure you want to delete this expense?')) return;
     
     try {
-        await authFetch(`${API_URL}/expenses/${id}`, { method: 'DELETE' });
+        const response = await authFetch(`${API_URL}/expenses/${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Failed to delete expense');
         await loadAllData();
     } catch (error) {
         console.error('Error deleting expense:', error);
-        alert('Error deleting expense');
+        alert('Error: ' + error.message);
     }
 }
 
@@ -1564,17 +1582,22 @@ async function saveGoal() {
     const method = id ? 'PUT' : 'POST';
     
     try {
-        await authFetch(url, {
+        const response = await authFetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
         
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Failed to save goal');
+        }
+        
         closeModal('goalModal');
         await loadAllData();
     } catch (error) {
         console.error('Error saving goal:', error);
-        alert('Error saving goal');
+        alert('Error: ' + error.message);
     }
 }
 
@@ -1587,17 +1610,22 @@ async function saveContribution() {
     };
     
     try {
-        await authFetch(`${API_URL}/goals/${goalId}/contribute`, {
+        const response = await authFetch(`${API_URL}/goals/${goalId}/contribute`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
         
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Failed to add contribution');
+        }
+        
         closeModal('contributeModal');
         await loadAllData();
     } catch (error) {
         console.error('Error adding contribution:', error);
-        alert('Error adding contribution');
+        alert('Error: ' + error.message);
     }
 }
 
@@ -1609,11 +1637,12 @@ async function deleteGoal(id) {
     if (!confirm('Are you sure you want to delete this goal? All contributions will also be deleted.')) return;
     
     try {
-        await authFetch(`${API_URL}/goals/${id}`, { method: 'DELETE' });
+        const response = await authFetch(`${API_URL}/goals/${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Failed to delete goal');
         await loadAllData();
     } catch (error) {
         console.error('Error deleting goal:', error);
-        alert('Error deleting goal');
+        alert('Error: ' + error.message);
     }
 }
 
