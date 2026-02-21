@@ -1230,44 +1230,80 @@ function changeCalendarMonth(direction) {
 
 // Event Listeners
 function setupEventListeners() {
-    // Shift form
-    document.getElementById('shiftForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        await saveShift();
-    });
-    
-    // Workplace form
-    document.getElementById('workplaceForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        await saveWorkplace();
-    });
-    
-    // Expense form
-    document.getElementById('expenseForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        await saveExpense();
-    });
-    
-    // Goal form
-    document.getElementById('goalForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        await saveGoal();
-    });
-    
-    // Contribute form
-    document.getElementById('contributeForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        await saveContribution();
-    });
-    
-    // Calendar navigation
-    const prevMonthBtn = document.getElementById('prevMonth');
-    const nextMonthBtn = document.getElementById('nextMonth');
-    if (prevMonthBtn) {
-        prevMonthBtn.addEventListener('click', () => changeCalendarMonth(-1));
-    }
-    if (nextMonthBtn) {
-        nextMonthBtn.addEventListener('click', () => changeCalendarMonth(1));
+    try {
+        // Shift form
+        const shiftForm = document.getElementById('shiftForm');
+        if (shiftForm) {
+            shiftForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                console.log('Shift form submitted');
+                await saveShift();
+            });
+        } else {
+            console.warn('shiftForm not found');
+        }
+        
+        // Workplace form
+        const workplaceForm = document.getElementById('workplaceForm');
+        if (workplaceForm) {
+            workplaceForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                console.log('Workplace form submitted');
+                await saveWorkplace();
+            });
+        } else {
+            console.warn('workplaceForm not found');
+        }
+        
+        // Expense form
+        const expenseForm = document.getElementById('expenseForm');
+        if (expenseForm) {
+            expenseForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                console.log('Expense form submitted');
+                await saveExpense();
+            });
+        } else {
+            console.warn('expenseForm not found');
+        }
+        
+        // Goal form
+        const goalForm = document.getElementById('goalForm');
+        if (goalForm) {
+            goalForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                console.log('Goal form submitted');
+                await saveGoal();
+            });
+        } else {
+            console.warn('goalForm not found');
+        }
+        
+        // Contribute form
+        const contributeForm = document.getElementById('contributeForm');
+        if (contributeForm) {
+            contributeForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                console.log('Contribution form submitted');
+                await saveContribution();
+            });
+        } else {
+            console.warn('contributeForm not found');
+        }
+        
+        // Calendar navigation
+        const prevMonthBtn = document.getElementById('prevMonth');
+        const nextMonthBtn = document.getElementById('nextMonth');
+        if (prevMonthBtn) {
+            prevMonthBtn.addEventListener('click', () => changeCalendarMonth(-1));
+        }
+        if (nextMonthBtn) {
+            nextMonthBtn.addEventListener('click', () => changeCalendarMonth(1));
+        }
+        
+        console.log('Event listeners attached successfully');
+    } catch (error) {
+        console.error('Error setting up event listeners:', error);
     }
 }
 

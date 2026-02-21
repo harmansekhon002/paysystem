@@ -342,7 +342,7 @@
                 <h2 id="shiftModalTitle">Add Shift</h2>
                 <span class="close" onclick="closeModal('shiftModal')">&times;</span>
             </div>
-            <form id="shiftForm">
+            <form id="shiftForm" onsubmit="event.preventDefault(); saveShift(); return false;">
                 <input type="hidden" id="shiftId">
                 
                 <div class="form-group">
@@ -387,7 +387,7 @@
                 <h2 id="workplaceModalTitle">Add Workplace</h2>
                 <span class="close" onclick="closeModal('workplaceModal')">&times;</span>
             </div>
-            <form id="workplaceForm">
+            <form id="workplaceForm" onsubmit="event.preventDefault(); saveWorkplace(); return false;">
                 <input type="hidden" id="workplaceId">
                 
                 <div class="form-group">
@@ -439,7 +439,7 @@
                 <h2 id="expenseModalTitle">Add Expense</h2>
                 <span class="close" onclick="closeModal('expenseModal')">&times;</span>
             </div>
-            <form id="expenseForm">
+            <form id="expenseForm" onsubmit="event.preventDefault(); saveExpense(); return false;">
                 <input type="hidden" id="expenseId">
                 
                 <div class="form-group">
@@ -492,7 +492,7 @@
                 <h2 id="goalModalTitle">Add Goal</h2>
                 <span class="close" onclick="closeModal('goalModal')">&times;</span>
             </div>
-            <form id="goalForm">
+            <form id="goalForm" onsubmit="event.preventDefault(); saveGoal(); return false;">
                 <input type="hidden" id="goalId">
                 
                 <div class="form-group">
@@ -545,7 +545,7 @@
                 <h2>Add Money to Goal</h2>
                 <span class="close" onclick="closeModal('contributeModal')">&times;</span>
             </div>
-            <form id="contributeForm">
+            <form id="contributeForm" onsubmit="event.preventDefault(); saveContribution(); return false;">
                 <input type="hidden" id="contributeGoalId">
                 
                 <div class="form-group">
